@@ -2,12 +2,14 @@
 // Caches the simulation shell so it runs fully offline once installed.
 // Strategy: cache-first for shell assets, network-first for everything else.
 
-const CACHE = 'delos-sim-v1';
+// Bump CACHE version when SHELL changes so old caches get purged on activate
+const CACHE = 'delos-sim-v16';
 const SHELL = [
   './',
-  './aqua_treatment_simulation_stage2.html',
+  './aqua_treatment_simulation_stage3.html',
   './manifest.json',
-  './icon.svg'
+  './icon.svg',
+  './farm_map.jpg'
 ];
 
 self.addEventListener('install', (event) => {
