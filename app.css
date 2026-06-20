@@ -1,0 +1,818 @@
+:root{--bg-0:#07101f;--bg-1:#0f1a30;--bg-2:#16223d;--ink:#e6edf7;--muted:#93a7c6;--accent:#4cc2ff;--accent-2:#6ee7b7;--warn:#f59e0b;--panel:#0f1a32;--panel-2:#16223d;--border:#1f2c4a;--border-2:#2a3a64}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:radial-gradient(1200px 700px at 50% -20%,#1a2746 0%,var(--bg-0) 60%);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100vh;overflow-x:hidden}
+.app{max-width:1240px;margin:0 auto;padding:24px 20px 48px}
+/* Page footer — centered, subtle muted copyright line at the bottom
+   of the simulator. Hidden during print so it doesn't show up in PDFs. */
+.page-footer{text-align:center;font-size:11.5px;color:var(--muted);letter-spacing:.3px;padding:24px 12px 8px;margin-top:24px;border-top:1px solid rgba(76,194,255,.12);opacity:.75}
+header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.logo{width:56px;height:auto;flex-shrink:0;filter:drop-shadow(0 4px 12px rgba(76,194,255,.22))}
+h1{font-size:22px;font-weight:600;margin:0;letter-spacing:.2px}
+.subtitle{color:var(--muted);font-size:13px}
+
+.section{margin-bottom:14px}
+.section-title{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:0 0 8px 4px;font-weight:600}
+/* ═══════════════════════════════════════════════════════════════════════
+   STAGE 3 · Customize pond picker
+   Aggregate vs Customize toggle, paint-mode brushes, farm-map picker.
+   Pond category colors used everywhere here:
+     RES = #4cc2ff (blue)   TP1 = #fb923c (orange)
+     TP2 = #6ee7b7 (green)  CP  = #a78bfa (purple)
+   ═══════════════════════════════════════════════════════════════════════ */
+/* Section title row: title on left, mode toggle on right, inline above panel */
+.section-title-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 4px 8px 4px;flex-wrap:wrap}
+.section-title-row .section-title{margin:0}
+.mode-toggle{display:inline-flex;background:var(--panel-2);border:1px solid var(--border-2);border-radius:8px;padding:3px;gap:2px}
+.mode-toggle .mode-opt{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--muted);font-weight:600;transition:background .15s,color .15s;user-select:none}
+.mode-toggle .mode-opt input{margin:0;accent-color:#4cc2ff}
+.mode-toggle .mode-opt:has(input:checked){background:rgba(76,194,255,.22);color:#cde9ff}
+/* Customize panel container.
+   `min-width: 0` is the crucial bit — flex items default to `min-width:auto`
+   which means they refuse to shrink below their min-content size. When
+   .map-wrap has an explicit pixel width larger than the container, that
+   propagates as min-content all the way up and pushes the entire panel
+   past .config's bounds. `min-width: 0` lets the flex item stay at its
+   own width regardless of oversized children. */
+.customize-panel{display:flex;flex-direction:column;gap:10px;min-width:0}
+/* Honor the [hidden] HTML attribute on elements that have an explicit
+   display:* class rule. Without this, switchPondMode()'s element.hidden
+   toggle would be visually a no-op because `display:flex` / `display:grid`
+   wins over the user-agent's `[hidden]{display:none}` on specificity. */
+.customize-panel[hidden]{display:none}
+.config-grid[hidden]{display:none}
+/* Brush toolbar */
+.brushes{display:flex;flex-wrap:wrap;gap:6px}
+.brush{flex:1 1 150px;min-width:140px;background:var(--panel-2);border:1px solid var(--border-2);border-radius:8px;padding:7px 10px;cursor:pointer;font-family:inherit;color:var(--ink);text-align:left;display:flex;flex-direction:column;gap:2px;transition:all .15s;position:relative}
+.brush:hover{border-color:#3a4a72;background:#1a2745}
+.brush[aria-pressed=true]{box-shadow:0 0 0 2px currentColor inset,0 4px 12px rgba(0,0,0,.3)}
+.brush .brush-head{display:inline-flex;align-items:center;gap:8px}
+.brush strong{font-size:12px;font-weight:700}
+.brush .cnt{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.2px}
+.brush .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:currentColor;flex-shrink:0;box-shadow:0 0 5px currentColor}
+.brush.b-RES{color:#4cc2ff}
+.brush.b-RES[aria-pressed=true]{background:rgba(76,194,255,.12)}
+.brush.b-TP1{color:#fb923c}
+.brush.b-TP1[aria-pressed=true]{background:rgba(251,146,60,.12)}
+.brush.b-TP2{color:#6ee7b7}
+.brush.b-TP2[aria-pressed=true]{background:rgba(110,231,183,.12)}
+.brush.b-CP{color:#a78bfa}
+.brush.b-CP[aria-pressed=true]{background:rgba(167,139,250,.12)}
+.brush.b-UN{color:#93a7c6}
+.brush.b-UN[aria-pressed=true]{background:rgba(147,167,198,.15)}
+/* Map controls (zoom in / out / fit) sit above the aerial */
+.map-controls{display:flex;align-items:center;gap:8px;padding:0 2px}
+.map-controls .zlabel{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:600}
+.zbtn{background:var(--panel-2);border:1px solid var(--border-2);color:var(--ink);border-radius:6px;width:30px;height:28px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;line-height:1;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.zbtn:hover{background:#1a2745;border-color:#3a4a72}
+.zbtn:disabled{opacity:.4;cursor:not-allowed}
+.zbtn-fit{background:var(--panel-2);border:1px solid var(--border-2);color:#cde9ff;border-radius:6px;padding:0 12px;height:28px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:.3px}
+.zbtn-fit:hover{background:rgba(76,194,255,.12);border-color:rgba(76,194,255,.45)}
+.zpct{font-size:12px;color:#cde9ff;min-width:50px;text-align:center;font-variant-numeric:tabular-nums;font-weight:600}
+/* ── Map frame & scroller — bulletproof layout isolation ──────────────
+   .map-frame is the OUTER fixed-size box that participates in normal
+   flow alongside the brushes and buttons. Its dimensions never change
+   regardless of zoom level — that's what guarantees the brushes/buttons
+   above can NEVER be pushed sideways by an oversized picture.
+   .map-scroll is `position:absolute; inset:0` so it fills the frame
+   exactly AND is removed from normal flow. Its scrollbars contain the
+   picture completely. Zoom only affects the .map-wrap inside the
+   scroller — it cannot reach out and touch siblings. */
+.map-frame{position:relative;width:100%;max-width:100%;height:72vh;min-height:520px;max-height:800px;border:1px solid var(--border);border-radius:10px;background:#000;overflow:hidden}
+.map-scroll{position:absolute;inset:0;overflow:auto;box-sizing:border-box;padding:8px;-webkit-overflow-scrolling:touch;text-align:left;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.28) transparent}
+/* Floating compass — anchored to .map-frame (NOT .map-scroll). Because
+   it lives outside the scroller it never pans with the picture, and
+   because it has a fixed CSS size in px it never grows with zoom. */
+.map-compass{position:absolute;top:10px;left:10px;width:44px;height:44px;pointer-events:none;z-index:5;filter:drop-shadow(0 2px 6px rgba(0,0,0,.55))}
+.map-compass svg{display:block;width:100%;height:100%}
+.map-scroll::-webkit-scrollbar{width:10px;height:10px}
+.map-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.28);border-radius:5px}
+.map-scroll::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.4)}
+.map-scroll::-webkit-scrollbar-track{background:transparent}
+.map-scroll::-webkit-scrollbar-corner{background:transparent}
+/* Map wrap — a regular block element inside .map-scroll.
+   `margin:0 auto` centers it horizontally when its JS-assigned pixel
+   width is <= the container's content width. When the user zooms past
+   the fit-width, JS adds `.is-overflow` which switches the margin to 0
+   so the horizontal scrollbar can scroll from the LEFT edge of the
+   picture (with margin:auto on an oversized element, browsers create
+   unreachable negative-margin overflow which is what was breaking the
+   layout at zoom > 150%). JS sets BOTH width and height explicitly in
+   pixels to preserve the image's aspect ratio precisely. */
+.map-wrap{position:relative;background:#000;transition:width .2s ease,height .2s ease;max-width:none;margin:0 auto}
+.map-wrap.is-overflow{margin:0}
+.map-img{display:block;width:100%;height:100%;user-select:none;-webkit-user-drag:none;object-fit:fill}
+.map-markers{position:absolute;inset:0;pointer-events:none}
+/* Pond markers — base pixel sizes are tuned for the natural "fit" zoom (1.0).
+   They scale up/down with the picture via the CSS custom property
+   `--marker-scale` which JS sets on .map-wrap to the current mapZoom in
+   applyMapZoom(). The scale is applied through the transform (instead of
+   per-class width/height multiplications) so border, font, shadow, and
+   marker size all scale together with a single multiplication. */
+.pond-marker{position:absolute;transform:translate(-50%,-50%) scale(var(--marker-scale,1));transform-origin:center center;border-radius:50%;border:2px solid rgba(255,255,255,.9);box-shadow:0 2px 6px rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.85);cursor:pointer;pointer-events:auto;transition:transform .12s,box-shadow .12s,opacity .15s;user-select:none}
+.pond-marker:hover{transform:translate(-50%,-50%) scale(calc(var(--marker-scale,1) * 1.25));z-index:10;box-shadow:0 0 0 3px rgba(255,255,255,.35),0 4px 12px rgba(0,0,0,.7)}
+.pond-marker.m-RES{background:rgba(76,194,255,.92);width:18px;height:18px}
+.pond-marker.m-TP1{background:rgba(251,146,60,.92);width:18px;height:18px}
+.pond-marker.m-TP2{background:rgba(110,231,183,.92);width:18px;height:18px}
+.pond-marker.m-CP{background:rgba(167,139,250,.85);width:14px;height:14px;font-size:7px}
+.pond-marker.m-UN{background:rgba(147,167,198,.5);border-color:rgba(255,255,255,.4);width:12px;height:12px;font-size:6px;opacity:.6}
+/* Dim non-active categories when a brush is held — focuses attention on the brush color */
+.map-wrap[data-brush] .pond-marker{opacity:.45}
+.map-wrap[data-brush="RES"] .pond-marker.m-RES,
+.map-wrap[data-brush="TP1"] .pond-marker.m-TP1,
+.map-wrap[data-brush="TP2"] .pond-marker.m-TP2,
+.map-wrap[data-brush="CP"]  .pond-marker.m-CP,
+.map-wrap[data-brush="UN"]  .pond-marker.m-UN{opacity:1}
+.map-wrap[data-brush] .pond-marker:hover{opacity:1}
+/* "How to use" collapsible guide — opens by default, click header to collapse */
+.how-to{background:linear-gradient(180deg,rgba(76,194,255,.07),rgba(110,231,183,.04));border:1px solid rgba(76,194,255,.22);border-radius:12px;padding:0;overflow:hidden}
+.how-to-head{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;list-style:none;user-select:none;font-size:13px;font-weight:600;color:#cde9ff}
+.how-to-head::-webkit-details-marker{display:none}
+.how-to-head:hover{background:rgba(76,194,255,.05)}
+.how-to-icon{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:rgba(76,194,255,.18);color:#4cc2ff;font-weight:700;font-size:13px;border:1px solid rgba(76,194,255,.45);flex-shrink:0}
+.how-to-title{flex:1;text-transform:uppercase;letter-spacing:1.2px;font-weight:700}
+.how-to-toggle{color:var(--muted);font-size:14px;transition:transform .2s ease}
+.how-to[open] .how-to-toggle{transform:rotate(180deg)}
+.how-to-body{padding:4px 18px 14px 18px;border-top:1px solid rgba(76,194,255,.12);color:rgba(205,233,255,.85);font-size:12px;line-height:1.5}
+/* ── How-to step list — compact, scannable ──────────────────────────
+   Numbered chips on the left, one-line-ish steps on the right. Tight
+   gap (6px) and 1.5 line-height keep the whole quick-start visible
+   at a glance without scrolling. Inline <em> pills are color-matched
+   to their actual buttons (primary=blue · success=green · warn=amber
+   · danger=red) so the action stands out in-line. */
+.how-to-steps{margin:10px 0 0 0;padding:0;list-style:none;counter-reset:howstep;display:flex;flex-direction:column;gap:6px}
+.how-to-steps li{padding:1px 0 1px 32px;position:relative;line-height:1.5;counter-increment:howstep}
+.how-to-steps li::before{content:counter(howstep);position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,rgba(76,194,255,.22),rgba(110,231,183,.16));border:1px solid rgba(76,194,255,.5);color:#cde9ff;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.how-to-steps li strong{color:#cde9ff;font-weight:600}
+.how-to-steps li > ul{margin:3px 0 0 0;padding-left:16px;list-style:disc;display:flex;flex-direction:column;gap:2px;color:rgba(205,233,255,.75);font-size:11.5px}
+.how-to-steps li > ul li{padding-left:0}
+.how-to-steps li > ul li::before{display:none}
+/* Button-reference pills inline in the text. Default em == green
+   (success). Add .primary / .warn / .danger for the matching button. */
+.how-to-steps li em{font-style:normal;font-weight:600;color:#bbf7d0;padding:0 6px;background:rgba(110,231,183,.12);border-radius:4px;border:1px solid rgba(110,231,183,.4);font-size:11px;white-space:nowrap;letter-spacing:.1px}
+.how-to-steps li em.primary{color:#cde9ff;background:rgba(76,194,255,.14);border-color:rgba(76,194,255,.45)}
+.how-to-steps li em.warn{color:#fde7b0;background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.45)}
+.how-to-steps li em.danger{color:#fecaca;background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.5)}
+.how-to-pill{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;margin:0 2px;vertical-align:1px}
+.how-to-pill.ok{background:rgba(110,231,183,.18);color:#bbf7d0;border:1px solid rgba(110,231,183,.45)}
+.how-to-pill.notice{background:rgba(167,139,250,.18);color:#ddd6fe;border:1px solid rgba(167,139,250,.45)}
+.how-to-pill.warn{background:rgba(251,191,36,.18);color:#fde68a;border:1px solid rgba(251,191,36,.45)}
+.how-to-pill.fail{background:rgba(239,68,68,.18);color:#fecaca;border:1px solid rgba(239,68,68,.45)}
+.how-to-tip{margin:10px 0 0 0;padding:7px 11px;background:rgba(76,194,255,.06);border-left:3px solid rgba(76,194,255,.55);border-radius:4px;font-size:11.5px;color:rgba(205,233,255,.9);line-height:1.5}
+.how-to-tip + .how-to-tip{margin-top:5px}
+/* ── Initial-load spotlight ──────────────────────────────────────────
+   On first page load, dim/blur everything except the How-to box so the
+   operator notices and reads the quick-start guide first. The first
+   click/tap/keypress anywhere dismisses it and the page returns to
+   normal. The overlay is fixed full-screen below the How-to (which is
+   raised to z-index:51 so it sits sharp/lit on top of the dim). */
+.spotlight-overlay{position:fixed;inset:0;background:rgba(2,6,18,.62);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);z-index:50;cursor:pointer;animation:spotlight-fadein .35s ease}
+.spotlight-overlay.spotlight-fadeout{animation:spotlight-fadeout .28s ease forwards}
+@keyframes spotlight-fadein{from{opacity:0}to{opacity:1}}
+@keyframes spotlight-fadeout{from{opacity:1}to{opacity:0}}
+.spotlight-active .how-to{position:relative;z-index:51;box-shadow:0 0 0 4px rgba(76,194,255,.28),0 0 40px rgba(76,194,255,.35),0 8px 40px rgba(0,0,0,.55);animation:spotlight-pulse 2.2s ease-in-out infinite}
+@keyframes spotlight-pulse{
+  0%,100%{box-shadow:0 0 0 4px rgba(76,194,255,.28),0 0 40px rgba(76,194,255,.35),0 8px 40px rgba(0,0,0,.55)}
+  50%{box-shadow:0 0 0 6px rgba(76,194,255,.45),0 0 60px rgba(76,194,255,.5),0 12px 50px rgba(0,0,0,.6)}
+}
+/* Small "tap to continue" hint pinned to the bottom of the dim. */
+.spotlight-hint{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:52;color:rgba(255,255,255,.9);font-size:13px;letter-spacing:.4px;background:rgba(2,6,18,.55);border:1px solid rgba(255,255,255,.2);padding:8px 16px;border-radius:999px;pointer-events:none;animation:spotlight-hint-pulse 1.8s ease-in-out infinite;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+@keyframes spotlight-hint-pulse{0%,100%{opacity:.7}50%{opacity:1}}
+
+/* ════════════════════════════════════════════════════════════════════
+   STAGE 4 · Scenarios — Save / Load / Compare / Print
+   "☰ Scenarios" button in the header opens a modal where operators
+   save the full simulator configuration (pond + pump + feed) as
+   named scenarios in localStorage, load one back, delete it, or
+   compare two side-by-side. Also hosts the Print Report trigger.
+   ═══════════════════════════════════════════════════════════════════ */
+.scen-btn{margin-left:auto;background:var(--panel-2);border:1px solid var(--border-2);color:var(--ink);border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:8px;flex-shrink:0;transition:background .15s,border-color .15s}
+.scen-btn:hover{background:#1a2745;border-color:var(--accent)}
+.scen-btn-icon{font-size:16px;line-height:1}
+/* Lock body scroll while ANY modal is open. JS sets position:fixed +
+   negative top via updateBodyLock() — operators expect the background
+   page to stay put when the dialog is on top.
+   `overflow:hidden` ALONE is not enough on mobile WebViews (iOS Safari,
+   Android Chrome on some HyperOS builds), so we use the position:fixed
+   trick which pins the page and saves/restores scroll position.
+
+   IMPORTANT: wrapped in @media screen because `position:fixed` on body
+   constrains its height to one viewport in print mode — that was
+   clipping multi-scenario PDF prints to a single page. In print, body
+   reverts to normal flow so all .rpt-doc pages render with their
+   page-break-before rules intact. */
+@media screen {
+  body.modal-open{position:fixed;left:0;right:0;overflow:hidden;width:100%}
+  html.modal-open{overflow:hidden}
+}
+/* ── Modal backdrop + card ───────────────────────────────────────────
+   Backdrop uses a deeper blur and a soft gradient (instead of a flat
+   color) so the card feels like it's floating above the page rather
+   than glued onto a dark sheet. */
+.modal-backdrop{position:fixed;inset:0;background:radial-gradient(ellipse at top,rgba(2,6,18,.55) 0%,rgba(2,6,18,.78) 80%);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:48px 16px 16px;overflow-y:auto;animation:scen-fadein .25s ease}
+.modal-backdrop[hidden]{display:none}
+@keyframes scen-fadein{from{opacity:0}to{opacity:1}}
+/* Card — subtle gradient surface + 2-layer shadow (close + far) gives
+   real depth. Border is hairline so the radius reads cleanly. */
+.modal-card{background:linear-gradient(180deg,rgba(76,194,255,.04) 0%,var(--panel) 60%);border:1px solid rgba(76,194,255,.18);border-radius:16px;max-width:720px;width:100%;box-shadow:0 4px 16px rgba(0,0,0,.35),0 24px 80px rgba(0,0,0,.55);animation:scen-pop .3s cubic-bezier(.16,1,.3,1)}
+.modal-card.modal-wide{max-width:960px}
+@keyframes scen-pop{from{transform:translateY(-10px) scale(.98);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
+/* Header — title block on left (icon + heading + subtitle), close button
+   on right. Bottom border is gradient-fade so it doesn't feel like a
+   hard partition. */
+.modal-head{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 22px 16px;border-bottom:1px solid rgba(76,194,255,.12);position:relative}
+.modal-head::after{content:"";position:absolute;left:22px;right:22px;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,rgba(76,194,255,.45),transparent)}
+.modal-head-titles{display:flex;align-items:center;gap:12px}
+.modal-head-icon{flex-shrink:0;width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,rgba(76,194,255,.18),rgba(110,231,183,.14));border:1px solid rgba(76,194,255,.35);display:inline-flex;align-items:center;justify-content:center;color:#cde9ff;font-size:18px;line-height:1}
+.modal-head-text{display:flex;flex-direction:column;gap:1px}
+.modal-head h2{margin:0;font-size:17px;font-weight:700;color:var(--ink);letter-spacing:-.1px;line-height:1.2}
+.modal-head-sub{font-size:11.5px;color:var(--muted);letter-spacing:.1px}
+.modal-close{background:transparent;border:1px solid transparent;color:var(--muted);font-size:22px;line-height:1;cursor:pointer;padding:4px 10px;border-radius:8px;font-family:inherit;transition:all .15s ease;margin-top:2px}
+.modal-close:hover{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);color:#fca5a5}
+.modal-body{padding:18px 22px 20px}
+/* ── Save-current panel ──────────────────────────────────────────────
+   Distinct background + small label above so it reads as "the action
+   bar" instead of just-another input. */
+.scen-save-wrap{background:rgba(76,194,255,.04);border:1px solid rgba(76,194,255,.16);border-radius:10px;padding:10px 12px;margin-bottom:14px}
+.scen-save-label{font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700;margin-bottom:6px}
+.scen-save{display:flex;gap:8px}
+.scen-save input{flex:1;min-width:0;background:var(--panel-2);color:var(--ink);border:1px solid var(--border-2);border-radius:7px;padding:9px 12px;font-size:13px;font-family:inherit;transition:border-color .15s ease,box-shadow .15s ease}
+.scen-save input::placeholder{color:rgba(147,167,198,.55)}
+.scen-save input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(76,194,255,.18)}
+.scen-save button{flex-shrink:0}
+/* Compare bar (shown when "Compare with..." is clicked) */
+.scen-compare-bar{display:flex;align-items:center;gap:8px;background:rgba(76,194,255,.06);border:1px solid rgba(76,194,255,.25);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--muted)}
+.scen-compare-bar[hidden]{display:none}
+.scen-compare-bar select{flex:1;background:var(--panel-2);color:var(--ink);border:1px solid var(--border-2);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit}
+/* ── Select-all / status bar above the list ─────────────────────────
+   Reads as a sticky "table header" with the bulk-select control on
+   left, live counts on the right. Status numbers use tabular-nums so
+   they don't jitter as they change. */
+.scen-select-bar{display:flex;align-items:center;gap:10px;padding:9px 14px;background:linear-gradient(180deg,var(--panel-2),rgba(22,34,61,.85));border:1px solid var(--border-2);border-radius:9px;margin-bottom:10px;font-size:12px;color:var(--muted);font-weight:500}
+.scen-select-bar[hidden]{display:none}
+.scen-select-bar input{margin:0;width:18px;height:18px;cursor:pointer;accent-color:var(--accent);flex-shrink:0}
+.scen-select-bar label{cursor:pointer;user-select:none;display:flex;align-items:center;gap:9px;color:#cde9ff;font-weight:600}
+.scen-select-bar .sel-status{margin-left:auto;font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.scen-select-bar .sel-status strong{color:#cde9ff;font-weight:700}
+.scen-select-bar .sel-status .sel-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;background:rgba(76,194,255,.14);border:1px solid rgba(76,194,255,.4);color:#bae6fd;font-weight:700;font-size:11px;letter-spacing:.2px}
+.scen-select-bar .sel-status .sel-pill.is-zero{background:transparent;border-color:var(--border-2);color:var(--muted)}
+/* ── Scenarios list ─────────────────────────────────────────────────
+   Rows use a calm panel-2 background that shifts to a subtle hover
+   tint, then accent tint when checked. Card-style border + soft
+   shadow on hover creates a touch of elevation without being noisy. */
+.scen-list{display:flex;flex-direction:column;gap:7px;margin-bottom:14px;max-height:360px;overflow-y:auto;padding-right:2px;scrollbar-width:thin;scrollbar-color:rgba(76,194,255,.25) transparent}
+.scen-list::-webkit-scrollbar{width:8px}
+.scen-list::-webkit-scrollbar-thumb{background:rgba(76,194,255,.25);border-radius:4px}
+.scen-list::-webkit-scrollbar-thumb:hover{background:rgba(76,194,255,.45)}
+.scen-list::-webkit-scrollbar-track{background:transparent}
+/* Empty state — bigger illustration + inviting copy */
+.scen-empty{padding:36px 18px;text-align:center;color:var(--muted);font-size:13px;background:linear-gradient(180deg,rgba(76,194,255,.04),rgba(22,34,61,.4));border:1px dashed rgba(76,194,255,.32);border-radius:12px}
+.scen-empty .scen-empty-icon{display:block;font-size:38px;margin-bottom:10px;opacity:.6;line-height:1}
+.scen-empty strong{color:#cde9ff;font-weight:600}
+/* Row card */
+.scen-row{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;flex-wrap:wrap;transition:background .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease;position:relative}
+.scen-row:hover{background:rgba(76,194,255,.06);border-color:rgba(76,194,255,.30);box-shadow:0 2px 12px rgba(0,0,0,.18)}
+/* Checked row gets a clear signal: left accent bar + accent tint */
+.scen-row.is-checked{background:rgba(76,194,255,.11);border-color:rgba(76,194,255,.5);box-shadow:inset 4px 0 0 var(--accent),0 2px 10px rgba(0,0,0,.18)}
+.scen-row.is-checked:hover{background:rgba(76,194,255,.14);border-color:rgba(76,194,255,.65)}
+.scen-row .scen-check{display:inline-flex;align-items:center;flex-shrink:0}
+.scen-row .scen-check input{margin:0;width:18px;height:18px;cursor:pointer;accent-color:var(--accent)}
+/* Name + meta stacked into a single block, with the name as primary
+   and the saved-at timestamp as quiet secondary text below. */
+.scen-row .scen-info{flex:1;min-width:140px;display:flex;flex-direction:column;gap:1px}
+/* Name field — click anywhere on it starts inline rename. Hover
+   affordance + edit pencil pseudo-element on hover hint at the
+   click-to-edit behavior. */
+.scen-row .scen-name{font-size:13.5px;font-weight:600;color:var(--ink);cursor:text;padding:3px 8px;margin:-3px -8px;border-radius:5px;transition:background .15s ease;letter-spacing:.1px;display:inline-flex;align-items:center;width:fit-content;max-width:100%}
+.scen-row .scen-name::after{content:"✎";opacity:0;font-size:10px;margin-left:8px;color:var(--muted);transition:opacity .15s ease}
+.scen-row:hover .scen-name::after{opacity:.55}
+.scen-row .scen-name:hover{background:rgba(76,194,255,.12)}
+.scen-row .scen-name:hover::after{opacity:.85}
+.scen-row .scen-name:focus{outline:none;background:rgba(76,194,255,.16)}
+.scen-row .scen-name-input{flex:1;min-width:140px;background:var(--panel);color:var(--ink);border:1px solid var(--accent);border-radius:5px;padding:3px 8px;font-size:13.5px;font-weight:600;font-family:inherit;outline:none;box-shadow:0 0 0 3px rgba(76,194,255,.22)}
+.scen-row .scen-meta{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:4px;letter-spacing:.1px}
+/* Action buttons — icon + label, tight padding, subtle hover */
+.scen-row button{background:var(--panel);border:1px solid var(--border-2);color:var(--ink);border-radius:7px;padding:6px 11px;font-size:11.5px;cursor:pointer;font-family:inherit;font-weight:600;transition:all .15s ease;display:inline-flex;align-items:center;gap:5px;letter-spacing:.1px}
+.scen-row button:hover{background:rgba(76,194,255,.12);border-color:rgba(76,194,255,.55);color:#cde9ff;transform:translateY(-1px)}
+.scen-row button:active{transform:translateY(0)}
+.scen-row button:disabled,.scen-actions button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.scen-row button:disabled:hover,.scen-actions button:disabled:hover{background:var(--panel);border-color:var(--border-2);color:var(--ink);transform:none}
+/* Footer Delete uses the shared .btn.danger red. The extra hover-shadow
+   here gives the scenarios modal's destructive action a bit more weight
+   than the plain .btn.danger used elsewhere (Playback Reset). */
+.scen-actions .btn.danger:not(:disabled):hover{box-shadow:0 4px 12px rgba(239,68,68,.18)}
+/* ── Footer bulk-action buttons ──────────────────────────────────────
+   Delete is destructive — it's separated from the safe Compare/Print
+   actions by an `.scen-actions-divider` (flexible spacer with a small
+   vertical rule), so the eye registers "danger zone" vs "actions". */
+.scen-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:14px;border-top:1px solid rgba(76,194,255,.14);margin-top:4px;position:relative}
+.scen-actions::before{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;background:linear-gradient(90deg,transparent,rgba(76,194,255,.35),transparent)}
+.scen-actions-divider{flex:1;display:flex;justify-content:center;align-items:center;min-width:8px}
+.scen-actions-divider::after{content:"";display:block;width:1px;height:18px;background:linear-gradient(180deg,transparent,var(--border-2),transparent);opacity:.7}
+.scen-actions .btn{font-size:12.5px;padding:8px 14px;border-radius:8px;transition:all .15s ease;display:inline-flex;align-items:center;gap:5px;font-weight:600}
+.scen-actions .btn:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.scen-actions .btn:not(:disabled):active{transform:translateY(0)}
+/* ── Status toast (success/error message at top of modal body) ──────
+   Slides down from the top of the body for better visual entry. */
+.scen-toast{padding:9px 14px;border-radius:8px;font-size:12.5px;margin-bottom:12px;animation:scen-toast-in .25s cubic-bezier(.16,1,.3,1);display:flex;align-items:center;gap:8px;font-weight:500}
+.scen-toast::before{font-size:14px;line-height:1}
+.scen-toast.ok{background:rgba(110,231,183,.14);border:1px solid rgba(110,231,183,.5);color:#bbf7d0}
+.scen-toast.ok::before{content:"✓";color:#6ee7b7}
+.scen-toast.err{background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.5);color:#fecaca}
+.scen-toast.err::before{content:"⚠";color:#fca5a5}
+.scen-toast[hidden]{display:none}
+@keyframes scen-toast-in{from{transform:translateY(-6px);opacity:0}to{transform:translateY(0);opacity:1}}
+/* Compare table — `table-layout:fixed` forces equal column widths
+   regardless of cell content. The first column is given a fixed share
+   (24%), and the remaining N data columns auto-divide the other 76%
+   equally — so every scenario column is the same width whether you
+   compare 1, 2, 3, or 4. word-wrap:break-word lets long names wrap. */
+.cmp-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12.5px;color:var(--ink)}
+.cmp-table colgroup col.cmp-col-param{width:24%}
+.cmp-table thead th{padding:10px 12px;text-align:left;background:var(--panel-2);border-bottom:1px solid var(--border-2);color:#cde9ff;font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;word-wrap:break-word;overflow-wrap:anywhere}
+.cmp-table thead th:nth-child(n+2){text-align:right}
+.cmp-table tbody td{padding:7px 12px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums;word-wrap:break-word;overflow-wrap:anywhere}
+.cmp-table tbody td:first-child{color:var(--muted);font-size:11.5px;font-weight:500}
+/* Parameter labels are stored sentence-case in JS but displayed
+   Title Case to match the operator's preferred report style. Applied
+   to data rows only — section dividers keep their uppercase styling. */
+.cmp-table tbody tr:not(.cmp-section) td:first-child{text-transform:capitalize}
+.cmp-table tbody td:nth-child(n+2){text-align:right;font-weight:600}
+.cmp-table tbody tr.cmp-section td{background:rgba(76,194,255,.05);color:#cde9ff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.7px;padding:6px 12px}
+.cmp-table tbody td.cmp-diff{color:#fde68a}
+/* Banded column striping — alternate VERTICAL columns get a subtle tint
+   for easier top-to-bottom scanning when comparing 2–4 scenarios. Only
+   tbody cells: thead keeps its unified dark bar (panel-2 background)
+   so the header reads as a single strip. Section divider rows (single
+   td with colspan) are excluded — :nth-child(1) is "odd", so they
+   never match :nth-child(even) — but the explicit guard keeps it
+   future-proof. */
+.cmp-table tbody tr:not(.cmp-section) td:nth-child(even){background:rgba(255,255,255,.035)}
+/* Row hover highlight — mousing over a data row tints ALL its cells
+   (across both banded and un-banded columns) so the operator can trace
+   one parameter's values left-to-right. !important is needed to win
+   over the column-stripe rule. .cmp-section rows are excluded so the
+   accent dividers stay calm. */
+.cmp-table tbody td{transition:background .12s ease}
+.cmp-table tbody tr:not(.cmp-section):hover td{background:rgba(76,194,255,.13) !important}
+/* Status badge — colored pill with semantic icon + label, used in the
+   System Recommendation row of the compare table. Matches the live
+   health-box color tokens for visual continuity. */
+.cmp-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.3px;line-height:1.3;white-space:nowrap}
+.cmp-badge .cmp-badge-ic{font-size:11px;line-height:1;display:inline-block}
+.cmp-badge.ok    {background:rgba(5,150,105,.18);   color:#6ee7b7; border:1px solid rgba(5,150,105,.55)}
+.cmp-badge.notice{background:rgba(109,40,217,.18);  color:#c4b5fd; border:1px solid rgba(109,40,217,.55)}
+.cmp-badge.warn  {background:rgba(180,83,9,.20);    color:#fbbf24; border:1px solid rgba(180,83,9,.55)}
+.cmp-badge.fail  {background:rgba(185,28,28,.20);   color:#fca5a5; border:1px solid rgba(185,28,28,.55)}
+.cmp-badge.none  {background:rgba(148,163,184,.15); color:#cbd5e1; border:1px solid rgba(148,163,184,.4)}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Utility classes — extracted from former inline style="..." attributes
+   so the HTML stays markup-only. Grouped here so future markup changes
+   never need to reach back into JS or inline CSS.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Map wrap default width — JS overrides via element.style.width when the
+   user zooms. The default keeps the picture filling its container before
+   the first applyMapZoom() call. */
+.map-wrap{width:100%}
+
+/* Config-status success line — appears next to "Apply & Reset" after a
+   commit. Color matches the Save/success accent (greenish). */
+.cfg-status{color:#6ee7b7}
+
+/* Playback row — the speed slider/number group needs to grow to fill the
+   remaining width so the slider is the dominant control on that row. */
+.controls .group--speed{flex:1;min-width:300px}
+
+/* ── Input validation styling ───────────────────────────────────
+   .is-invalid is added by app.js's runValidation() to any input
+   whose value is empty, non-numeric, ≤ 0, or out of its declared
+   range. Targets the input directly + bubbles a visual warning
+   ring to the wrapper span (.sp-input / .fc-suffix) via :has() so
+   the unit label "m³/h" / "kg" also turns red. The trailing ⚠ glyph
+   is positioned by the wrapper for fields that have one, or by the
+   input's own right-pad for naked inputs (#speedInput). */
+input.is-invalid{
+  border:1px solid #ef4444 !important;
+  background-color:rgba(239,68,68,0.10);
+  box-shadow:0 0 0 2px rgba(239,68,68,0.25);
+  color:#fecaca;
+  padding-right:22px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M8 1.5L15 14H1L8 1.5z' fill='%23ef4444'/><rect x='7.25' y='5.5' width='1.5' height='4.5' fill='%23fff'/><rect x='7.25' y='11' width='1.5' height='1.5' fill='%23fff'/></svg>");
+  background-repeat:no-repeat;
+  background-position:right 4px center;
+  background-size:14px 14px;
+}
+input.is-invalid:focus{ outline:none; box-shadow:0 0 0 3px rgba(239,68,68,0.40); }
+/* Wrapper rings — .sp-input and .fc-suffix wrap the input + a unit
+   label. When the inner input is invalid, light up the whole pill. */
+.sp-input:has(input.is-invalid),
+.fc-suffix:has(input.is-invalid){
+  border-color:#ef4444 !important;
+  background:rgba(239,68,68,0.08);
+}
+.sp-input:has(input.is-invalid) .sp-unit,
+.fc-suffix:has(input.is-invalid)        { color:#fecaca }
+
+/* Scene-legend colored dots — one modifier per indicator. Replaces the
+   per-element inline `background:` styles in the markup. */
+.scene-legend .dot--flow       {background:#22d3ee}
+.scene-legend .dot--exch       {background:#8a6a3a}
+.scene-legend .dot--chlor      {background:#fbbf24}
+.scene-legend .dot--sed        {background:#cbd5e1}
+.scene-legend .dot--bubble     {background:#4cc2ff}
+.scene-legend .dot--pump-active{background:rgba(76,194,255,.6);border:1px solid rgba(76,194,255,.9)}
+.scene-legend .dot--pump-idle  {background:#5a6a8a}
+
+/* ── Print stylesheet — generates a clean 1-page report. The .report-only
+   wrapper is hidden on-screen and revealed only when printing. JS fills
+   it with the active configuration just before window.print() runs. */
+.report-only{display:none}
+@media print {
+  /* ── Page setup ──────────────────────────────────────────────────
+     Goal: each scenario report fits on exactly ONE A4 page, including
+     the Customize-mode case which has a tall Pond Assignments table
+     with up to 55 cultivation pond IDs. Strategy: tighten EVERY
+     vertical dimension (page margins, section gaps, table padding,
+     fonts) just enough that even the worst-case content still fits. */
+  @page{size:A4;margin:10mm}
+  /* HARD reset for mobile WebViews. Without this, body keeps its
+     screen-mode `min-height:100vh` and any lingering inline styles from
+     the scroll-lock JS (`top:-Xpx`, etc.) — which on Android/iOS print
+     pipelines makes body slightly TALLER than one A4 page, spilling
+     a blank 2nd page. Resetting position/top/min-height/height/margin/
+     padding/transform forces body to sit exactly as tall as its content
+     during print, so a single-scenario report = a single A4 page. */
+  html,body{background:#fff !important;color:#000 !important;font-size:10.5px;min-height:0 !important;height:auto !important;margin:0 !important;padding:0 !important;position:static !important;top:auto !important;left:auto !important;right:auto !important;width:auto !important;overflow:visible !important;transform:none !important}
+  /* Hide EVERYTHING in body except the print-only report. */
+  body > *:not(.report-only){display:none !important}
+  .report-only{display:block !important;margin:0;padding:0}
+  /* Report header — DELOS logo on left, title block on right. */
+  .report-only .rpt-header{display:flex;align-items:center;gap:10px;margin:0 0 2px 0}
+  .report-only .rpt-logo{width:40px;height:32px;flex-shrink:0}
+  .report-only .rpt-titles{display:flex;flex-direction:column;line-height:1.15}
+  .report-only .rpt-titles h1{margin:0}
+  .report-only .rpt-company{font-size:9.5px;font-weight:600;color:#475569;letter-spacing:.2px;margin-top:1px}
+  .report-only h1{font-size:15px;color:#0c4a6e;margin:0 0 2px 0;font-weight:700;line-height:1.15}
+  .report-only .rpt-sub{font-size:9.5px;color:#475569;margin:0 0 6px 0;padding-bottom:5px;border-bottom:1.2px solid #0c4a6e}
+  /* Sections — tight gaps so all 4-5 sections fit comfortably on 1 page */
+  .report-only .rpt-section{margin-bottom:6px}
+  .report-only .rpt-section h2{font-size:10.5px;color:#0c4a6e;text-transform:uppercase;letter-spacing:.6px;margin:0 0 3px 0;font-weight:700}
+  /* Tables — tight cell padding + compact font so a 7-row table only
+     takes ~120px instead of ~180px. Cell border is the line-divider. */
+  .report-only table{width:100%;border-collapse:collapse;font-size:9.5px;line-height:1.35}
+  .report-only table th,.report-only table td{padding:2.5px 7px;border-bottom:1px solid #cbd5e1;text-align:left;font-variant-numeric:tabular-nums;vertical-align:middle}
+  .report-only table th{background:#f1f5f9;color:#0c4a6e;font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:.4px;padding:3px 7px}
+  /* Numeric columns (Pond Configuration Area/Height/Volume) — centered */
+  .report-only table th.num,.report-only table td.num{text-align:center}
+  /* Single-value cells (Sea Pumps, Feed & Water Demand) — right-aligned */
+  .report-only table td.val{text-align:right}
+  /* Footer — minimal margin so it doesn't push report off page */
+  .report-only .rpt-foot{margin-top:6px;font-size:8.5px;color:#64748b;padding-top:4px;border-top:1px solid #cbd5e1}
+  /* Multi-scenario print: each .rpt-doc is one scenario, one A4 page.
+     Page-break-before on every doc except the first. */
+  .report-only .rpt-doc + .rpt-doc{page-break-before:always;break-before:page}
+  /* Avoid splitting a scenario across pages, AND avoid orphaning rows
+     within a table at the bottom of a page. */
+  .report-only .rpt-doc{page-break-inside:avoid;break-inside:avoid}
+  .report-only table,.report-only tr{page-break-inside:avoid;break-inside:avoid}
+}
+/* Side-by-side row for two related sections (Feed & Water Demand + Sea Pumps).
+   Each child grows to fill its half but wraps to a stacked layout below 920px
+   so neither section gets squashed on smaller viewports. */
+.section-row{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch;margin-bottom:14px}
+.section-row>.section{flex:1 1 420px;min-width:0;margin-bottom:0;display:flex;flex-direction:column}
+.section-row>.section>.feed-calc,.section-row>.section>.sp-panel{flex:1}
+
+/* Scene — focal point, distinct look */
+.scene-card{background:linear-gradient(180deg,#0a1428 0%,#0a1428 55%,#0d1a36 100%);border:1px solid rgba(76,194,255,.18);border-radius:16px;padding:14px;box-shadow:0 18px 50px rgba(0,0,0,.4),0 0 0 1px rgba(76,194,255,.06)}
+.scene-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding:4px 6px}
+.scene-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.scene-status .stat-tag{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);padding:3px 8px;background:rgba(76,194,255,.10);border:1px solid rgba(76,194,255,.25);border-radius:6px}
+.scene-status .stat-tag strong{color:#cde9ff}
+.scene-status .pill{font-size:12px;padding:4px 10px;border-radius:999px;background:rgba(76,194,255,.15);border:1px solid rgba(76,194,255,.35);color:#cde9ff;font-weight:600}
+.scene-status .pill.paused{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.4);color:#fde7b0}
+.scene-legend{display:flex;justify-content:center;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:11px;color:var(--muted)}
+.scene-legend .lg{display:flex;align-items:center;gap:6px;opacity:.35;transition:opacity 200ms}
+.scene-legend .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+canvas#scene{display:block;width:100%;height:auto;border-radius:10px;background:transparent}
+
+.controls,.config{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.controls .group,.config .group{display:flex;align-items:center;gap:8px}
+.controls label,.config label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+/* ── Button color taxonomy ──────────────────────────────────────────
+   Single semantic palette used across the whole simulator so any
+   button's intent is readable at a glance:
+     .btn          = neutral (default UI action)
+     .btn.primary  = BLUE   — informational commit (Apply, Compare)
+     .btn.success  = GREEN  — positive save/affirm action
+     .btn.warn     = AMBER  — caution (Set Default, Print)
+     .btn.danger   = RED    — destructive (Reset, Delete)                       */
+.btn{background:#1a2745;color:var(--ink);border:1px solid var(--border-2);border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 150ms,border-color 150ms}
+.btn:hover{background:#22335a;border-color:#3a4a72}
+.btn.primary{background:rgba(76,194,255,.18);border-color:rgba(76,194,255,.5);color:#cde9ff}
+.btn.primary:hover{background:rgba(76,194,255,.28)}
+.btn.success{background:rgba(110,231,183,.18);border-color:rgba(110,231,183,.5);color:#bbf7d0}
+.btn.success:hover{background:rgba(110,231,183,.28);border-color:rgba(110,231,183,.7)}
+.btn.warn{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.4);color:#fde7b0}
+.btn.warn:hover{background:rgba(245,158,11,.22);border-color:rgba(245,158,11,.6)}
+.btn.danger{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.5);color:#fecaca}
+.btn.danger:hover{background:rgba(239,68,68,.22);border-color:rgba(239,68,68,.75)}
+.preset{background:var(--panel-2);color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:500}
+.preset:hover{background:#1a2745;color:var(--ink)}
+.preset.active{background:rgba(76,194,255,.22);border-color:rgba(76,194,255,.55);color:#cde9ff}
+.controls input[type=range]{flex:1;min-width:120px;max-width:240px;accent-color:#4cc2ff}
+.controls input[type=number],.config input[type=text]{background:var(--panel-2);color:var(--ink);border:1px solid var(--border-2);border-radius:6px;padding:5px 8px;font-size:13px;font-family:inherit;font-variant-numeric:tabular-nums}
+.controls input[type=number]{width:72px}
+.config input[type=text]{width:88px}
+.controls input[type=number]:focus,.config input[type=text]:focus{outline:none;border-color:#4cc2ff}
+.speed-disp{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:#cde9ff;min-width:64px;text-align:right}
+.divider{width:1px;height:24px;background:var(--border)}
+
+/* `overflow:hidden` + `min-width:0` on the panel are belt-and-suspenders to
+   guarantee no flex-item inside (brushes, buttons, map-scroll) can ever
+   push the panel itself wider than .section. `flex-wrap:nowrap` overrides
+   the inherited `flex-wrap:wrap` from `.controls,.config` (the base rule
+   was designed for the row-flex Controls panel and is wrong for the
+   column-flex Pond Config — wrap in column direction creates extra
+   columns from oversized children, which is what was bleeding the map
+   layout sideways into the brushes/buttons). */
+.config{flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:10px;overflow:hidden;min-width:0}
+.config-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.config-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.cfg-tank{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.cfg-tank .name{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px;font-weight:600}
+.cfg-tank .inputs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.cfg-tank .inputs .x{color:var(--muted);font-size:14px}
+.cfg-tank .vol-out{margin-top:6px;font-size:14px;font-weight:600;color:#cde9ff;font-variant-numeric:tabular-nums}
+.cfg-tank .vol-out .small{font-size:11px;color:var(--muted);font-weight:500;margin-left:4px}
+.cfg-foot{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* Sea pumps — inline, NO panel box */
+/* Sea Pumps panel — matches the visual style of .config and .feed-calc:
+   shared --panel background, --border outline, rounded corners, padding. */
+.sp-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+.sp-toggles-wrap{display:flex;flex-direction:column;gap:6px}
+.sp-toggle-label{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:600;padding-left:2px}
+/* ─── Sea Pumps control bar ───────────────────────────────────────────────
+   Layout: [inputs ......]   = [result card pinned right]
+   • Inputs are content-sized (no dead space inside pills)
+   • Visual "=" cue separates inputs from computed result
+   • Result card pins to the right edge and contains a two-tier hierarchy:
+       PER CYCLE   27,622 m³/day  ← primary, larger, green
+       Total Flow  1,381 m³/h     ← supporting, smaller, blue
+   The result card eliminates the previous awkward auto-margin gap between
+   "Duty" and "Total Flow". */
+.sp-bar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:stretch;margin:0}
+.sp-field{display:flex;flex-direction:column;gap:5px;min-width:0;justify-content:flex-end}
+.sp-field>label{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:600;padding-left:2px}
+.sp-field input[type=text]{padding:4px 6px;background:transparent;color:var(--ink);border:none;font-size:13px;font-variant-numeric:tabular-nums;font-family:inherit;text-align:right;width:auto}
+.sp-field input[type=text]:focus{outline:none}
+/* Input pills size to content; inputs themselves use `field-sizing:content`
+   (modern browsers) with a sensible min/max-width fallback so "20" doesn't
+   sit in a 50px well of empty space. */
+.sp-input{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 6px;background:rgba(76,194,255,.06);border:1px solid rgba(76,194,255,.22);border-radius:8px;height:32px;box-sizing:border-box;transition:border-color .15s,background .15s}
+.sp-input:focus-within{border-color:#4cc2ff;background:rgba(76,194,255,.10)}
+.sp-input input[type=text]{width:48px;min-width:28px;max-width:64px;field-sizing:content}
+.sp-input-amber{background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.28)}
+.sp-input-amber:focus-within{border-color:#fbcd86;background:rgba(245,158,11,.10)}
+.sp-unit{font-size:11px;color:var(--muted);white-space:nowrap}
+/* The "=" between inputs and result: a quiet visual cue, not a hard divider. */
+.sp-eq{align-self:flex-end;font-size:20px;color:rgba(255,255,255,.18);font-weight:300;line-height:32px;padding:0 2px;user-select:none}
+/* Result card — sits inline next to the "=" cue, compact two-tier hierarchy. */
+.sp-result{display:flex;flex-direction:column;justify-content:center;gap:3px;padding:5px 10px;background:linear-gradient(135deg,rgba(110,231,183,.11),rgba(76,194,255,.05));border:1px solid rgba(110,231,183,.30);border-radius:8px}
+.sp-result-row{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.sp-result-label{font-size:8.5px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700;min-width:54px}
+/* PER CYCLE — the dominant result. */
+.sp-result-main{font-size:12px;color:#bbf7d0;padding-bottom:3px;border-bottom:1px solid rgba(110,231,183,.16)}
+.sp-result-main .sp-result-label{color:rgba(110,231,183,.85)}
+.sp-result-main strong{font-size:16px;color:#6ee7b7;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.3px;text-shadow:0 0 10px rgba(110,231,183,.22)}
+.sp-result-unit{font-size:10.5px;color:rgba(187,247,208,.7);font-weight:500}
+/* TOTAL FLOW — supporting row. */
+.sp-result-sub{font-size:10.5px;color:rgba(205,233,255,.78)}
+.sp-result-sub .sp-result-label{color:rgba(205,233,255,.55)}
+.sp-result-sub strong{font-size:12px;color:#4cc2ff;font-weight:700;font-variant-numeric:tabular-nums}
+.sp-result-meta{font-size:9.5px;color:var(--muted);margin-left:auto;font-weight:500}
+.toggles-row{display:flex;gap:5px;flex-wrap:wrap;margin:0}
+.toggles-row .toggle{min-width:40px;padding:4px 9px}
+.pumpcount-grp{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(76,194,255,.06);border:1px solid rgba(76,194,255,.22);border-radius:8px;height:32px;box-sizing:border-box}
+.pumpcount-grp strong{font-variant-numeric:tabular-nums;min-width:16px;text-align:center;color:#cde9ff;font-size:14px;font-weight:700}
+.ctr-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;background:var(--panel-2);color:#cde9ff;border:1px solid var(--border-2);border-radius:5px;font-size:14px;font-weight:600;cursor:pointer;line-height:1;font-family:inherit}
+.ctr-btn:hover:not(:disabled){background:rgba(76,194,255,.18);border-color:#4cc2ff;color:#fff}
+.ctr-btn:disabled{opacity:.35;cursor:not-allowed}
+.toggle{padding:4px 9px;border-radius:6px;background:#1a2745;color:var(--muted);border:1px solid var(--border-2);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.5px;text-align:center;transition:all 150ms}
+.toggle.on{background:rgba(110,231,183,.22);border-color:rgba(110,231,183,.55);color:#bbf7d0}
+.toggle.off{background:rgba(245,158,11,.10);border-color:rgba(245,158,11,.3);color:#fbcd86}
+.toggle:hover{filter:brightness(1.15)}
+
+.timeline{margin-top:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px}
+.timeline .head{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:6px}
+/* Pump-timeline strip — the 24-hour daily schedule bar. */
+.strip{position:relative;height:44px;background:var(--panel-2);border-radius:6px;overflow:hidden}
+.strip .win{position:absolute;top:0;bottom:0;background:linear-gradient(180deg,rgba(76,194,255,.32),rgba(76,194,255,.18));border-left:1px solid rgba(76,194,255,.6);border-right:1px solid rgba(76,194,255,.6)}
+.strip .now{position:absolute;top:-2px;bottom:-2px;width:2px;background:#6ee7b7;box-shadow:0 0 8px rgba(110,231,183,.7)}
+.strip .tick{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.05)}
+.strip .tick.mid{background:rgba(255,255,255,.12)}
+.strip .tick.major{background:rgba(255,255,255,.25)}
+.strip .lbl{position:absolute;bottom:2px;font-size:8px;color:#6b7e9c;letter-spacing:-.2px;transform:translateX(-50%)}
+.strip .lbl.major{font-size:10px;color:#cde9ff;font-weight:600}
+
+.status-bar{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.pond-card{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:8px;display:flex;align-items:center;gap:10px}
+.pond-card .badge{font-size:11px;padding:3px 9px;border-radius:6px;background:#1a2745;color:var(--muted);text-transform:uppercase;letter-spacing:1px;min-width:100px;text-align:center;font-weight:700}
+.pond-card.empty .badge{background:#1a2745;color:#8aa0c2}
+.pond-card.filling .badge,.pond-card.receiving .badge{background:rgba(76,194,255,.22);color:#cde9ff}
+.pond-card.chlorinating .badge{background:rgba(110,231,183,.22);color:#c8f6dd}
+.pond-card.settling .badge{background:rgba(245,158,11,.22);color:#fde7b0}
+.pond-card.ready .badge,.pond-card.exchanging .badge{background:rgba(110,231,183,.28);color:#bbf7d0}
+.pond-card.transferring .badge{background:rgba(76,194,255,.28);color:#bae6fd}
+/* Reservoir-only composite state: Pump A is filling from the sea AND
+   Pump B is draining to a TP at the same time. Slightly brighter cyan
+   so the operator can visually distinguish it from the single-action
+   states. Badge text is longer ("FILLING & TRANSFERRING"), so we
+   allow it to grow wider than the 100px minimum. */
+.pond-card.filling-transferring .badge{background:rgba(76,194,255,.32);color:#cde9ff;min-width:0;letter-spacing:.6px}
+.pond-card.idle .badge,.pond-card.standby .badge{background:#1a2745;color:#93a7c6}
+.pond-card .info{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.pond-card .label{font-size:12px;color:var(--ink);font-weight:600}
+.pond-card .desc{font-size:11px;color:var(--muted)}
+.pond-card .vol{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink);min-width:110px;text-align:right}
+
+.pumprow{display:flex;gap:8px;margin-top:8px}
+.pumpchip{flex:1;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center}
+.pumpchip .nm{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.pumpchip .st{font-size:13px;font-weight:600;margin-top:2px}
+.pumpchip.on{border-color:rgba(76,194,255,.6);box-shadow:0 0 16px rgba(76,194,255,.18)}
+.pumpchip.on .st{color:#cde9ff}
+.pumpchip.off .st{color:var(--muted)}
+@media(max-width:1100px){.config-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:680px){.status-bar{grid-template-columns:1fr}.config-grid{grid-template-columns:1fr}}
+
+
+.scene-clock{display:flex;align-items:center;gap:12px;background:rgba(15,26,50,.85);border:1px solid rgba(76,194,255,.18);border-radius:10px;padding:8px 14px}
+.sun-moon{width:30px;height:30px;border-radius:50%;flex-shrink:0;transition:all 400ms}
+.sun-moon.day{background:radial-gradient(circle,#fde047 0%,#f59e0b 70%);box-shadow:0 0 18px rgba(251,191,36,.55)}
+.sun-moon.night{background:radial-gradient(circle,#e2e8f0 0%,#94a3b8 70%);box-shadow:0 0 14px rgba(203,213,225,.35),inset -10px 0 0 rgba(15,26,50,.92)}
+.clock-text{display:flex;flex-direction:column;line-height:1.15}
+.clock-text .day-name{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600}
+.clock-text .time-val{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+
+
+.pump-chip{display:inline-flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--border);border-radius:7px;padding:5px 11px;font-size:11px;color:var(--muted)}
+.pump-chip strong{color:#cde9ff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+.pump-chip.active{border-color:rgba(110,231,183,.55);background:rgba(110,231,183,.10);box-shadow:0 0 12px rgba(110,231,183,.15)}
+.pump-chip.active strong{color:#bbf7d0}
+.pump-chip.standby{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.06)}
+.pump-chip.standby strong{color:#fde7b0}
+
+.cfg-tank .time .io-line{display:inline-block;line-height:1.5}
+.cfg-tank .time strong{color:#cde9ff;font-weight:600;font-size:11px;letter-spacing:.2px}
+.cfg-tank .time{font-size:11px;line-height:1.5;margin-top:4px;color:var(--muted)}
+
+.btn-group{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+.pump-legend{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:0 0 14px 0;padding:10px 16px;background:linear-gradient(180deg,rgba(76,194,255,.06),rgba(110,231,183,.04));border:1px solid rgba(76,194,255,.18);border-radius:10px;font-size:12px;color:var(--muted)}
+.pump-legend .lg-title{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#cde9ff;font-weight:700;margin-right:6px}
+.pump-legend .lg-pump{display:inline-flex;align-items:center;gap:8px}
+.pump-legend .lg-name{color:#bbf7d0;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:3px 9px;background:rgba(110,231,183,.14);border:1px solid rgba(110,231,183,.4);border-radius:5px}
+.pump-legend .lg-arrow{color:var(--muted);font-size:14px;line-height:1}
+.pump-legend .lg-role{color:var(--ink);font-weight:500}
+
+/* Embedded variant — no inner box, sits flat directly inside the panel. */
+.pump-legend.embedded{margin:0 0 4px 0;padding:0;background:transparent;border:none;border-radius:0;gap:8px 14px}
+.pump-legend.embedded .lg-title{font-size:10px}
+/* "Pump Reference" sub-label sits inside the panel, above the chips. */
+.pump-ref-label{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:rgba(76,194,255,.7);font-weight:700;margin:0 0 6px 2px}
+/* Compact single-row variant — all 3 chips fit on one line even at half width.
+   Tighter padding/gap/font-size; arrows shrink; chip labels stay readable. */
+.pump-legend.compact-row{flex-wrap:nowrap;gap:6px 10px;padding:7px 10px;font-size:11.5px;overflow:hidden}
+.pump-legend.compact-row .lg-pump{flex:0 1 auto;min-width:0;gap:6px;white-space:nowrap}
+.pump-legend.compact-row .lg-name{padding:2px 6px;font-size:10px;letter-spacing:.5px}
+.pump-legend.compact-row .lg-arrow{font-size:12px}
+.pump-legend.compact-row .lg-role{font-size:11.5px;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.pump-legend .lg-name.a{color:#fecaca;background:rgba(239,68,68,.16);border-color:rgba(239,68,68,.55)}
+.pump-legend .lg-name.b{color:#fde7b0;background:rgba(251,191,36,.16);border-color:rgba(251,191,36,.5)}
+.pump-legend .lg-name.c{color:#bbf7d0;background:rgba(110,231,183,.16);border-color:rgba(110,231,183,.5)}
+
+.legend-bullets{list-style:none;padding:0;margin:12px 0 0 0;font-size:12px;line-height:1.55;color:var(--muted)}
+.legend-bullets li{padding-left:18px;position:relative;margin:5px 0}
+.legend-bullets li::before{content:"";position:absolute;left:4px;top:8px;width:6px;height:6px;border-radius:50%;background:#4cc2ff;box-shadow:0 0 5px rgba(76,194,255,.5)}
+.legend-bullets li strong{color:#cde9ff;font-weight:600}
+
+.scene-legend .lg.active{opacity:1}
+.scene-legend .lg.active .dot{box-shadow:0 0 8px currentColor;transform:scale(1.1)}
+
+.r-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.r-stat{display:flex;flex-direction:column;gap:2px;padding:9px 12px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px}
+.r-stat .r-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.r-stat .r-val{color:var(--ink);font-variant-numeric:tabular-nums;font-size:13px}
+.r-stat .r-val strong{font-size:18px;font-weight:700;color:#cde9ff;margin-right:3px}
+
+.pump-timelines{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:8px}
+.pt-title{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:8px}
+.pt-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.pt-lbl{font-size:10px;font-weight:700;letter-spacing:.4px;min-width:62px;padding:3px 7px;border-radius:4px;text-transform:uppercase;text-align:center}
+.pt-lbl.pt-a{background:rgba(239,68,68,.16);color:#fecaca;border:1px solid rgba(239,68,68,.45)}
+.pt-lbl.pt-b{background:rgba(251,191,36,.16);color:#fde7b0;border:1px solid rgba(251,191,36,.45)}
+.pt-lbl.pt-c{background:rgba(110,231,183,.16);color:#bbf7d0;border:1px solid rgba(110,231,183,.45)}
+.pt-bar{flex:1;position:relative;height:14px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden}
+.pt-bar .seg{position:absolute;top:0;bottom:0;border-radius:3px;transition:width 150ms linear}
+.pt-bar .seg.a{background:linear-gradient(180deg,rgba(239,68,68,.55),rgba(239,68,68,.4))}
+.pt-bar .seg.b{background:linear-gradient(180deg,rgba(251,191,36,.65),rgba(251,191,36,.45))}
+.pt-bar .seg.c{background:linear-gradient(180deg,rgba(110,231,183,.6),rgba(110,231,183,.42))}
+.pt-bar .now{position:absolute;top:-2px;bottom:-2px;width:2px;background:#ffffff;box-shadow:0 0 6px rgba(255,255,255,.7);z-index:2}
+.pt-axis{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-left:72px;margin-top:4px;font-variant-numeric:tabular-nums}
+
+.pt-bar .seg.forecast{background:repeating-linear-gradient(45deg,rgba(251,191,36,.35) 0,rgba(251,191,36,.35) 4px,rgba(251,191,36,.15) 4px,rgba(251,191,36,.15) 8px);opacity:.7}
+
+.pt-lbl.pt-ch{background:rgba(34,211,238,.16);color:#a5f3fc;border:1px solid rgba(34,211,238,.45)}
+.pt-lbl.pt-st{background:rgba(167,139,250,.16);color:#ddd6fe;border:1px solid rgba(167,139,250,.45)}
+.pt-bar .seg.chlor.tp1{background:linear-gradient(180deg,rgba(34,211,238,.5),rgba(34,211,238,.35))}
+.pt-bar .seg.chlor.tp2{background:linear-gradient(180deg,rgba(34,211,238,.85),rgba(34,211,238,.6))}
+.pt-bar .seg.settle.tp1{background:linear-gradient(180deg,rgba(167,139,250,.5),rgba(167,139,250,.35))}
+.pt-bar .seg.settle.tp2{background:linear-gradient(180deg,rgba(167,139,250,.85),rgba(167,139,250,.6))}
+.pt-bar .seg.chlor.forecast{background:repeating-linear-gradient(45deg,rgba(34,211,238,.32) 0,rgba(34,211,238,.32) 4px,rgba(34,211,238,.12) 4px,rgba(34,211,238,.12) 8px);opacity:.8}
+.pt-bar .seg.settle.forecast{background:repeating-linear-gradient(45deg,rgba(167,139,250,.32) 0,rgba(167,139,250,.32) 4px,rgba(167,139,250,.12) 4px,rgba(167,139,250,.12) 8px);opacity:.8}
+
+.health-box{display:flex;align-items:flex-start;gap:14px;border:2px solid rgba(110,231,183,.55);background:linear-gradient(180deg,rgba(110,231,183,.10),rgba(110,231,183,.04));border-radius:12px;padding:14px 16px;margin-bottom:12px;transition:background 200ms,border-color 200ms}
+.health-box.ok{animation:healthPulse 2.8s ease-in-out infinite}
+.health-box.fail{border-color:rgba(239,68,68,.7);background:linear-gradient(180deg,rgba(239,68,68,.13),rgba(239,68,68,.05));animation:failAlarm 1.8s ease-in-out infinite}
+.health-icon{font-size:42px;font-weight:900;line-height:1;color:#6ee7b7;width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(110,231,183,.16);border:2px solid rgba(110,231,183,.55);text-shadow:0 0 8px rgba(110,231,183,.6)}
+.health-box.fail .health-icon{color:#fca5a5;background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.7);text-shadow:0 0 10px rgba(252,165,165,.7)}
+.health-info{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.health-text{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#bbf7d0}
+.health-box.fail .health-text{color:#fecaca}
+.health-desc{font-size:11px;color:rgba(187,247,208,.7);line-height:1.4}
+.health-box.fail .health-desc{color:rgba(254,202,202,.85)}
+/* Animations are slower and use a smaller, softer glow (10-13px spread vs the
+   former 22-28px) so the pulse reads as ambient, not as flashing UI noise.
+   Background no longer swaps colors mid-cycle; only the box-shadow breathes. */
+@keyframes healthPulse{0%,100%{box-shadow:0 0 0 0 rgba(110,231,183,0)}50%{box-shadow:0 0 12px 1px rgba(110,231,183,.30)}}
+@keyframes failAlarm{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.10)}50%{box-shadow:0 0 13px 2px rgba(239,68,68,.42)}}
+
+.health-box.warn{border-color:rgba(251,191,36,.7);background:linear-gradient(180deg,rgba(251,191,36,.12),rgba(251,191,36,.04));animation:warnPulse 2.2s ease-in-out infinite}
+.health-box.warn .health-icon{color:#fbbf24;background:rgba(251,191,36,.18);border-color:rgba(251,191,36,.7);text-shadow:0 0 8px rgba(251,191,36,.55)}
+.health-box.warn .health-text{color:#fde68a}
+.health-box.warn .health-desc{color:rgba(254,243,199,.9)}
+@keyframes warnPulse{0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,0)}50%{box-shadow:0 0 12px 1px rgba(251,191,36,.38)}}
+
+/* "Notice" state — soft purple breathing. Used for advisories that do NOT
+   cause system failure: TP construction (compliance not met), inactive
+   pumps with adequate supply, headroom >20%, TP1/TP2 imbalance, etc. */
+.health-box.notice{border-color:rgba(167,139,250,.75);background:linear-gradient(180deg,rgba(167,139,250,.13),rgba(167,139,250,.04));animation:noticeBlink 2.2s ease-in-out infinite}
+.health-box.notice .health-icon{color:#c4b5fd;background:rgba(167,139,250,.2);border-color:rgba(167,139,250,.75);text-shadow:0 0 8px rgba(167,139,250,.55)}
+.health-box.notice .health-text{color:#ddd6fe}
+.health-box.notice .health-desc{color:rgba(221,214,254,.88)}
+@keyframes noticeBlink{0%,100%{box-shadow:0 0 0 0 rgba(167,139,250,0)}50%{box-shadow:0 0 13px 2px rgba(167,139,250,.42)}}
+
+.btn:disabled,.btn:disabled:hover{opacity:.4;cursor:not-allowed;pointer-events:none;filter:grayscale(40%);box-shadow:none}
+
+.feed-calc{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.fc-inputs{display:flex;flex-wrap:wrap;gap:14px}
+.fc-field{display:flex;flex-direction:column;gap:5px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600}
+.fc-field .fc-suffix{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ink);text-transform:none;letter-spacing:.2px;font-weight:500}
+.fc-field input[type=text]{width:88px;background:var(--panel-2);color:var(--ink);border:1px solid var(--border-2);border-radius:6px;padding:6px 9px;font-size:13px;font-family:inherit;font-variant-numeric:tabular-nums}
+.fc-field input[type=text]:focus{outline:none;border-color:#4cc2ff}
+/* Two-column bottom: summary list (flex:1) + speedometer (auto). */
+.fc-bottom{display:flex;align-items:center;gap:10px;padding-top:8px;border-top:1px solid var(--border)}
+/* CSS Grid keeps the value column at a single x-position so all numbers stack
+   neatly under each other. Labels (col 1) size to the widest label;
+   values (col 2) sit immediately after at a consistent baseline. */
+.fc-summary{flex:1;min-width:0;display:grid;grid-template-columns:max-content max-content;column-gap:14px;row-gap:6px;align-items:baseline}
+.fc-row{display:contents}
+.fc-row>span{font-size:12px;color:var(--muted);white-space:nowrap}
+.fc-row strong{color:#cde9ff;font-size:13px;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.health-bullets{list-style:none;padding:0;margin:6px 0 0 0;display:flex;flex-direction:column;gap:5px}
+.health-bullets li{position:relative;padding-left:14px;font-size:11px;line-height:1.5;color:rgba(187,247,208,.82)}
+.health-bullets li::before{content:"●";position:absolute;left:0;top:0;color:#6ee7b7;font-size:8px;line-height:1.9}
+/* Sub-bullet (used for fix-option lists). Indented, lighter, with a small
+   arrow marker — visually subordinate to the main issue bullet above it. */
+.health-bullets li.sub{padding-left:26px;font-size:10.5px;color:rgba(255,255,255,.62);margin-top:-2px;line-height:1.55}
+.health-bullets li.sub::before{content:"↳";color:rgba(255,255,255,.45);font-size:10px;left:12px;top:1px;line-height:1.4}
+.health-box.warn .health-bullets li{color:rgba(254,243,199,.92)}
+.health-box.warn .health-bullets li::before{color:#fbbf24}
+.health-box.warn .health-bullets li.sub{color:rgba(254,243,199,.65)}
+.health-box.warn .health-bullets li.sub::before{color:rgba(251,191,36,.55)}
+.health-box.fail .health-bullets li{color:rgba(254,202,202,.95)}
+.health-box.fail .health-bullets li::before{color:#fca5a5}
+.health-box.fail .health-bullets li.sub{color:rgba(254,202,202,.70)}
+.health-box.fail .health-bullets li.sub::before{color:rgba(252,165,165,.55)}
+.health-box.notice .health-bullets li{color:rgba(221,214,254,.92)}
+.health-box.notice .health-bullets li::before{color:#c4b5fd}
+.health-box.notice .health-bullets li.sub{color:rgba(221,214,254,.65)}
+.health-box.notice .health-bullets li.sub::before{color:rgba(196,181,253,.55)}
+
+.compliance-gauge{display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0}
+.compliance-gauge svg{width:150px;height:110px;flex-shrink:0}
+#complNeedle{transform-origin:80px 80px;transition:transform .9s cubic-bezier(0.34,1.4,0.5,1)}
+#complArc{transition:stroke-dashoffset .9s cubic-bezier(0.34,1.4,0.5,1),stroke .35s ease,filter .35s ease}
+#complArc.compl-red{stroke:#ef4444;filter:drop-shadow(0 0 6px rgba(239,68,68,0.6))}
+#complArc.compl-amber{stroke:#fbbf24;filter:drop-shadow(0 0 6px rgba(251,191,36,0.6))}
+#complArc.compl-lime{stroke:#a3e635;filter:drop-shadow(0 0 6px rgba(163,230,53,0.6))}
+#complArc.compl-green{stroke:#34d399;filter:drop-shadow(0 0 7px rgba(52,211,153,0.7))}
+#complValue{transition:fill .35s ease}
+#complValue.compl-red{fill:#fecaca}
+#complValue.compl-amber{fill:#fde68a}
+#complValue.compl-lime{fill:#d9f99d}
+#complValue.compl-green{fill:#bbf7d0}

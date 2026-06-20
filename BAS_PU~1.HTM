@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<!--
+		Viewport — always pinned to a 1240px desktop layout, regardless of
+		whether the page is opened in a regular browser or as the installed
+		PWA. The browser scales to fit; pinch-to-zoom remains available.
+		Equivalent to Chrome's "Request desktop site" toggle being checked
+		by default.
+	-->
+	<meta name="viewport" content="width=1240,viewport-fit=cover">
+	<title>DELOS Pump Simulator</title>
+
+	<!-- PWA · installable Android/iOS home-screen app -->
+	<link rel="manifest" href="manifest.json">
+	<meta name="theme-color" content="#0a1428">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="apple-mobile-web-app-title" content="DELOS Pump Sim">
+	<meta name="application-name" content="DELOS Pump Simulator">
+	<link rel="icon" type="image/svg+xml" href="icon.svg">
+	<link rel="apple-touch-icon" href="icon.svg">
+
+	<!-- Styles + behaviour. app.js is `defer`red so it runs after the
+	     document is parsed but before DOMContentLoaded — the bootstrap
+	     snippet at the top of app.js sets scrollRestoration='manual'
+	     early enough that the browser hasn't restored scroll yet. -->
+	<link rel="stylesheet" href="app.css">
+	<script src="app.js" defer></script>
+</head>
+<body>
+
+<div class="app">
+
+	<header>
+		<!-- DELOS logo (3 stacked wave shapes) — inline SVG so no external asset needed -->
+		<svg class="logo" viewBox="0 0 140 110" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DELOS logo">
+			<defs>
+				<linearGradient id="logoTop" x1="0%" y1="0%" x2="100%" y2="100%">
+					<stop offset="0%"   stop-color="#4ec5ee" />
+					<stop offset="100%" stop-color="#1d92cf" />
+				</linearGradient>
+				<linearGradient id="logoMid" x1="0%" y1="0%" x2="100%" y2="100%">
+					<stop offset="0%"   stop-color="#3d72b9" />
+					<stop offset="100%" stop-color="#264f99" />
+				</linearGradient>
+			</defs>
+			<path d="M 12,12 C 32,2 52,2 70,12 C 88,22 108,22 128,12 L 128,28 C 108,38 88,38 70,28 C 52,18 32,18 12,28 Z" fill="url(#logoTop)" />
+			<path d="M 12,42 C 32,32 52,32 70,42 C 88,52 108,52 128,42 L 128,58 C 108,68 88,68 70,58 C 52,48 32,48 12,58 Z" fill="url(#logoMid)" />
+			<path d="M 12,72 C 32,62 52,62 70,72 C 88,82 108,82 128,72 L 128,88 C 108,98 88,98 70,88 C 52,78 32,78 12,88 Z" fill="#152d4a" />
+		</svg>
+		<div>
+			<h1>PT. BAS — Configurable Pump Performance Simulation</h1>
+			<div class="subtitle">PT. Delos Teknologi Maritim Jaya</div>
+		</div>
+		<!-- Scenarios button — pushes to the right via margin-left:auto in
+		     the flex header. Click opens the Stage-4 Scenarios modal. -->
+		<button type="button" class="scen-btn" id="btnScenarios" aria-label="Open scenarios">
+			<span class="scen-btn-icon" aria-hidden="true">☰</span>
+			<span>Scenarios</span>
+		</button>
+	</header>
+
+	<!-- ════════════════════════════════════════════════════════════════════
+	     HOW TO USE — collapsible quick-start guide. Open by default on
+	     first load; user can collapse to dismiss.
+	     ════════════════════════════════════════════════════════════════════ -->
+	<div class="section">
+		<details class="how-to" open>
+			<summary class="how-to-head">
+				<span class="how-to-icon">ⓘ</span>
+				<span class="how-to-title">How to use this simulator</span>
+				<span class="how-to-toggle">▾</span>
+			</summary>
+			<div class="how-to-body">
+				<ol class="how-to-steps">
+					<li><strong>Set pond dimensions</strong> — pick <strong>Aggregate</strong> (type totals) or <strong>Customize</strong> (paint individual ponds on the aerial). Press <em class="primary">Apply &amp; Reset</em> to commit.</li>
+					<li><strong>Configure Sea Pumps</strong> — count (±), avg flow per pump, Pump A duty hours. "Per Cycle" pill shows daily delivery.</li>
+					<li><strong>Set Feed &amp; Water Demand</strong> — kg / 2,500 m² + m³ / kg standard. Compliance gauge shows if pumps can meet demand.</li>
+					<li><strong>Read the health box</strong> —
+						<span class="how-to-pill ok">GREEN</span> balanced ·
+						<span class="how-to-pill notice">PURPLE</span> OK + advisories ·
+						<span class="how-to-pill warn">AMBER</span> review ·
+						<span class="how-to-pill fail">RED</span> failure predicted.</li>
+					<li><strong>Run</strong> — press <em>▶ Play</em>; slider/presets 0.5× → 100× to fast-forward.</li>
+					<li><strong>Reset</strong> — <em class="danger">↻ Reset</em> = pumps/feed/duty/speed to defaults · <em class="warn">Set Default &amp; Reset</em> = pond dimensions to factory.</li>
+					<li><strong>☰ Scenarios</strong> (top-right) — save/load/compare/print named configurations.
+						<ul>
+							<li>Type a name, press <em>💾 Save</em> to store current config (duplicates blocked).</li>
+							<li>Click a name to rename inline. <strong>Load</strong>/<strong>Update</strong> per row.</li>
+							<li>Tick rows then use <em class="danger">🗑 Delete</em> · <em class="primary">⇆ Compare</em> (1 = vs live, 2–4 = against each other) · <em class="warn">🖨 Print</em> (1 A4 / scenario).</li>
+							<li>Compare highlights diffs in yellow + shows saved health badge (✓ ℹ ⚠ ✕) per scenario.</li>
+						</ul>
+					</li>
+				</ol>
+				<p class="how-to-tip">💡 Purple "TP Too Small" still runs but never hits 100% compliance — enlarge TP1/TP2 or reduce feed.</p>
+				<p class="how-to-tip">📋 Save before tweaking; <em>Load</em> to revert; <em class="primary">⇆ Compare</em> to evaluate "what if".</p>
+			</div>
+		</details>
+	</div>
+
+	<!-- ════════════════════════════════════════════════════════════════════
+	     POND CONFIGURATION — Aggregate (typed totals) or Customize (paint
+	     individual ponds on the farm aerial). Aggregate is the default;
+	     the customize panel is hidden via the `hidden` attribute and
+	     toggled by switchPondMode() in app.js.
+	     ════════════════════════════════════════════════════════════════════ -->
+	<div class="section">
+		<!-- Section title row: "Pond Configuration" label on the left,
+		     Aggregate ↔ Customize mode toggle pulled OUT of the panel and
+		     placed inline with the section title on the right. -->
+		<div class="section-title-row">
+			<div class="section-title">Pond Configuration</div>
+			<div class="mode-toggle" role="radiogroup" aria-label="Pond configuration mode">
+				<label class="mode-opt"><input type="radio" name="pondMode" value="aggregate" checked> Aggregate</label>
+				<label class="mode-opt"><input type="radio" name="pondMode" value="customize"> Customize</label>
+			</div>
+		</div>
+
+		<div class="config">
+			<div class="config-head">
+				<!-- Subtitle is mode-aware: in Aggregate it shows the volume
+				     formula; in Customize it shows the brush-instruction
+				     hint (which moves UP here so it's visible immediately,
+				     instead of hiding below the map). -->
+				<span class="subtitle" id="configSubtitle">Volume = Area × Fill Height</span>
+				<div class="btn-group">
+					<button type="button" class="btn warn"    id="btnDefaults">Set Default &amp; Reset</button>
+					<button type="button" class="btn primary" id="btnApply">Apply &amp; Reset</button>
+				</div>
+			</div>
+
+			<!-- ═══ AGGREGATE PANEL — typed totals (original behaviour) ═══ -->
+			<div class="config-grid" id="aggregatePanel">
+				<div class="cfg-tank">
+					<div class="name">Reservoir</div>
+					<div class="inputs">
+						<input type="text" inputmode="decimal" id="resArea" value="30149"> m²
+						<span class="x">×</span>
+						<input type="text" inputmode="decimal" id="resHeight" value="2.38"> m
+					</div>
+					<div class="vol-out">Total Volume: <span id="resVol">71,755</span> m³</div>
+					<div class="time" id="resTime">—</div>
+				</div>
+				<div class="cfg-tank">
+					<div class="name">Treatment Pond 1</div>
+					<div class="inputs">
+						<input type="text" inputmode="decimal" id="tp1Area" value="20686"> m²
+						<span class="x">×</span>
+						<input type="text" inputmode="decimal" id="tp1Height" value="1.29"> m
+					</div>
+					<div class="vol-out">Total Volume: <span id="tp1Vol">26,685</span> m³</div>
+					<div class="time" id="tp1Time">—</div>
+				</div>
+				<div class="cfg-tank">
+					<div class="name">Treatment Pond 2</div>
+					<div class="inputs">
+						<input type="text" inputmode="decimal" id="tp2Area" value="20995"> m²
+						<span class="x">×</span>
+						<input type="text" inputmode="decimal" id="tp2Height" value="1.29"> m
+					</div>
+					<div class="vol-out">Total Volume: <span id="tp2Vol">27,084</span> m³</div>
+					<div class="time" id="tp2Time">—</div>
+				</div>
+				<div class="cfg-tank">
+					<div class="name">Cultivation Pond</div>
+					<div class="inputs">
+						<input type="text" inputmode="decimal" id="cpArea" value="119879"> m²
+						<span class="x">×</span>
+						<input type="text" inputmode="decimal" id="cpHeight" value="1.30"> m
+					</div>
+					<div class="vol-out">Total Volume: <span id="cpVol">155,843</span> m³</div>
+					<div class="time" id="cpTime">Water-Exchange Model — Level Stays Constant</div>
+				</div>
+			</div>
+
+			<!-- ═══ CUSTOMIZE PANEL — paint-mode picker on the farm aerial ═══
+			     Initial state is hidden via the semantic `hidden` HTML
+			     attribute (no inline style). switchPondMode() toggles it. -->
+			<div class="customize-panel" id="customizePanel" hidden>
+				<!-- Brush row — pick a category, then tap ponds to assign.
+				     Tap same category to unassign. Each tile: [● Name] on
+				     top inline, [count · area · volume] below. -->
+				<div class="brushes" role="toolbar" aria-label="Pond category brushes">
+					<button type="button" class="brush b-RES" data-cat="RES" aria-pressed="false">
+						<span class="brush-head"><span class="dot"></span><strong>Reservoir</strong></span>
+						<span class="cnt"><span id="brushCntRES">14</span> ponds · <span id="brushAreaRES">0</span> m² · <span id="brushVolRES">0</span> m³</span>
+					</button>
+					<button type="button" class="brush b-TP1" data-cat="TP1" aria-pressed="false">
+						<span class="brush-head"><span class="dot"></span><strong>Treatment Pond 1</strong></span>
+						<span class="cnt"><span id="brushCntTP1">10</span> ponds · <span id="brushAreaTP1">0</span> m² · <span id="brushVolTP1">0</span> m³</span>
+					</button>
+					<button type="button" class="brush b-TP2" data-cat="TP2" aria-pressed="false">
+						<span class="brush-head"><span class="dot"></span><strong>Treatment Pond 2</strong></span>
+						<span class="cnt"><span id="brushCntTP2">10</span> ponds · <span id="brushAreaTP2">0</span> m² · <span id="brushVolTP2">0</span> m³</span>
+					</button>
+					<button type="button" class="brush b-CP" data-cat="CP" aria-pressed="false">
+						<span class="brush-head"><span class="dot"></span><strong>Cultivation Pond</strong></span>
+						<span class="cnt"><span id="brushCntCP">55</span> ponds · <span id="brushAreaCP">0</span> m² · <span id="brushVolCP">0</span> m³</span>
+					</button>
+					<button type="button" class="brush b-UN" data-cat="UN" aria-pressed="false">
+						<span class="brush-head"><span class="dot"></span><strong>Unassign</strong></span>
+						<span class="cnt"><span id="brushCntUN">0</span> ponds · <span id="brushAreaUN">0</span> m²</span>
+					</button>
+				</div>
+
+				<!-- Map controls (zoom in/out/reset) sit above the aerial -->
+				<div class="map-controls">
+					<span class="zlabel">Zoom</span>
+					<button type="button" class="zbtn"     id="zoomOut" title="Zoom out">−</button>
+					<span class="zpct" id="zoomPct">100%</span>
+					<button type="button" class="zbtn"     id="zoomIn"  title="Zoom in">+</button>
+					<button type="button" class="zbtn-fit" id="zoomFit" title="Fit width">⤢ Fit</button>
+				</div>
+
+				<!-- Map: .map-frame is a fixed-size box in normal flow that
+				     the brushes and buttons above can never be pushed by,
+				     no matter the zoom. The inner .map-scroll is absolutely
+				     positioned (out of flow) and clips the oversized
+				     picture with its own scrollbars. -->
+				<div class="map-frame">
+					<div class="map-scroll">
+						<div class="map-wrap" id="mapWrap">
+							<img class="map-img" src="farm_map.jpg" alt="PT. BAS aerial map" draggable="false" id="custMap">
+							<div class="map-markers" id="custMarkers"></div>
+						</div>
+					</div>
+					<!-- Floating compass overlay — sits in the top-left
+					     corner of the frame and never moves with zoom or
+					     scroll because it's a sibling of the scroller, not
+					     a descendant. -->
+					<div class="map-compass" aria-hidden="true" title="North">
+						<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+							<circle  cx="24" cy="24" r="22" fill="rgba(15,23,42,0.78)" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" />
+							<text    x="24" y="13" text-anchor="middle" fill="#fff" font-size="9" font-weight="800" font-family="system-ui,sans-serif">N</text>
+							<polygon points="24,16 30,28 24,25 18,28" fill="#ef4444" />
+							<polygon points="24,40 18,28 24,31 30,28" fill="#e2e8f0" opacity="0.85" />
+						</svg>
+					</div>
+				</div>
+			</div>
+
+			<div class="cfg-foot">
+				<span>Press <strong>Apply &amp; Reset</strong> to commit dimensions and restart the cycle.</span>
+				<span class="cfg-status" id="cfgStatus"></span>
+			</div>
+		</div>
+	</div>
+
+	<!-- ════════════════════════════════════════════════════════════════════
+	     Side-by-side row: Feed & Water Demand + Sea Pumps share one
+	     horizontal band. Wraps to two stacked rows on narrow viewports
+	     via flex-wrap.
+	     ════════════════════════════════════════════════════════════════════ -->
+	<div class="section-row">
+
+		<div class="section">
+			<div class="section-title">Feed &amp; Water Demand</div>
+			<div class="feed-calc" id="feedCalc">
+				<div class="fc-inputs">
+					<label class="fc-field">Expected feed
+						<span class="fc-suffix"><input type="text" inputmode="decimal" id="feedPer2500" value="235"> kg / 2,500 m² / day</span>
+					</label>
+					<label class="fc-field">Water exchange standard
+						<span class="fc-suffix"><input type="text" inputmode="decimal" id="waterPerKg" value="3"> m³ / kg</span>
+					</label>
+				</div>
+				<!-- Two-column bottom row: summary list on the left (label
+				     tight to value), compliance speedometer on the right. -->
+				<div class="fc-bottom">
+					<div class="fc-summary">
+						<div class="fc-row"><span>Total feed plan</span>                  <strong id="feedTotal">— kg/day</strong></div>
+						<div class="fc-row"><span>Required water (feed × standard)</span> <strong id="waterRequired">— m³/day</strong></div>
+						<div class="fc-row"><span>Pump cycle delivery</span>              <strong id="pumpDelivery">— m³/day</strong></div>
+						<div class="fc-row"><span>Achievable m³/kg</span>                 <strong id="achievableRatio">—</strong></div>
+					</div>
+					<div class="compliance-gauge" id="complianceGauge">
+						<svg viewBox="0 0 160 118" aria-hidden="true">
+							<path                  d="M 20 80 A 60 60 0 0 1 140 80" stroke="#1f2c4a" stroke-width="10" fill="none" stroke-linecap="round" />
+							<path   id="complArc"  d="M 20 80 A 60 60 0 0 1 140 80" stroke="#34d399" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="188.496" stroke-dashoffset="188.496" />
+							<text   x="20"  y="93"  text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="system-ui">0%</text>
+							<text   x="80"  y="14"  text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="system-ui">50%</text>
+							<text   x="140" y="93"  text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="system-ui">100%</text>
+							<line   id="complNeedle" x1="80" y1="80" x2="80" y2="28" stroke="#cde9ff" stroke-width="2" stroke-linecap="round" />
+							<circle cx="80" cy="80" r="5" fill="#0f1a32" stroke="#cde9ff" stroke-width="1.2" />
+							<text   id="complValue" x="80" y="106" text-anchor="middle" fill="#cde9ff" font-size="22" font-weight="800" font-family="system-ui" font-variant-numeric="tabular-nums">0</text>
+							<text                   x="80" y="116" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="7" font-weight="600" font-family="system-ui" letter-spacing="0.8">% COMPLIANCE</text>
+						</svg>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="section">
+			<div class="section-title">Sea Pumps</div>
+			<div class="sp-panel">
+				<!-- "Pump Reference" sub-label sits above the legend chips.
+				     The three chips (Pump A · Pump B · Pump C) lay out on
+				     a single inline row using compact padding so they fit
+				     even at half-width. -->
+				<div class="pump-ref-label">Pump Reference</div>
+				<div class="pump-legend embedded compact-row">
+					<span class="lg-pump"><span class="lg-name a">Pump A</span><span class="lg-arrow">→</span><span class="lg-role">Sea Pumps</span></span>
+					<span class="lg-pump"><span class="lg-name b">Pump B</span><span class="lg-arrow">→</span><span class="lg-role">Reservoir Pumps</span></span>
+					<span class="lg-pump"><span class="lg-name c">Pump C</span><span class="lg-arrow">→</span><span class="lg-role">Treatment Pond Pumps</span></span>
+				</div>
+
+				<!-- Labelled-field control bar. Top row = numeric inputs
+				     in fixed-width pills, bottom row = pump toggle grid
+				     (wraps freely as N grows from 1 → 12 without pushing
+				     other controls around). -->
+				<div class="sp-bar">
+					<div class="sp-field" title="Total number of sea pumps installed">
+						<label>Pump Count</label>
+						<span class="pumpcount-grp">
+							<button type="button" class="ctr-btn" id="seaPumpMinus" aria-label="Remove one sea pump">−</button>
+							<strong id="seaPumpTotalCount">7</strong>
+							<button type="button" class="ctr-btn" id="seaPumpPlus"  aria-label="Add one sea pump">+</button>
+						</span>
+					</div>
+					<div class="sp-field" title="Average flow rate per pump (m³/h)">
+						<label>Avg Rate · Pump</label>
+						<span class="sp-input"><input type="text" inputmode="decimal" id="seaAvg" value="197.3"><span class="sp-unit">m³/h</span></span>
+					</div>
+					<div class="sp-field" title="How many hours per day Pump A is allowed to run">
+						<label>Pump A Duty</label>
+						<span class="sp-input sp-input-amber"><input type="text" inputmode="decimal" id="pumpAHours" value="20"><span class="sp-unit">h / day</span></span>
+					</div>
+
+					<!-- "=" visual cue between inputs and computed result -->
+					<div class="sp-eq" aria-hidden="true">=</div>
+
+					<!-- RESULT CARD — pinned right. Two-tier hierarchy:
+					     dominant "Per Cycle" daily total on top, supporting
+					     "Total Flow" hourly rate below it, separated by a
+					     thin divider. -->
+					<div class="sp-result">
+						<div class="sp-result-row sp-result-main">
+							<span class="sp-result-label">Per Cycle</span>
+							<strong id="seaPumpDaily">27,622</strong>
+							<span class="sp-result-unit">m³ / day</span>
+						</div>
+						<div class="sp-result-row sp-result-sub">
+							<span class="sp-result-label">Total Flow</span>
+							<strong id="seaPumpTotal">1,381 m³/h</strong>
+							<span class="sp-result-meta">(<span id="seaCount">7</span>/<span id="seaPumpTotalCount2">7</span> ON)</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- Active-pumps row: small label + toggle grid that wraps
+				     freely for N ∈ [1, 12]. -->
+				<div class="sp-toggles-wrap">
+					<label class="sp-toggle-label">Active Pumps</label>
+					<div class="toggles-row" id="seaPumpGrid"></div>
+				</div>
+			</div>
+		</div>
+
+	</div><!-- /.section-row -->
+
+	<!-- ════════════════════════════════════════════════════════════════════
+	     PLAYBACK — play/reset + speed slider + preset speed buttons.
+	     ════════════════════════════════════════════════════════════════════ -->
+	<div class="section">
+		<div class="section-title">Playback</div>
+		<div class="controls">
+			<div class="group">
+				<button type="button" class="btn success" id="btnPlay">▶ Play</button>
+				<button type="button" class="btn danger"  id="btnReset">↻ Reset</button>
+			</div>
+			<div class="divider"></div>
+			<!-- Speed group fills the remaining row width via
+			     .group--speed (flex:1; min-width:300px). -->
+			<div class="group group--speed">
+				<label>Speed</label>
+				<input type="range"  id="speedSlider" min="-1"  max="2.3"  step="0.01" value="0">
+				<input type="number" id="speedInput"  min="0.1" max="200"  step="0.1"  value="1">
+				<span class="speed-disp"><span id="speedDisp">1.0</span>×</span>
+			</div>
+			<div class="divider"></div>
+			<div class="group">
+				<label>Preset</label>
+				<button type="button" class="preset"        data-speed="0.5">0.5×</button>
+				<button type="button" class="preset active" data-speed="1">1×</button>
+				<button type="button" class="preset"        data-speed="2">2×</button>
+				<button type="button" class="preset"        data-speed="5">5×</button>
+				<button type="button" class="preset"        data-speed="10">10×</button>
+				<button type="button" class="preset"        data-speed="30">30×</button>
+				<button type="button" class="preset"        data-speed="100">100×</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- ════════════════════════════════════════════════════════════════════
+	     SCENE — canvas renderer + status pills + 24-h timeline strip.
+	     ════════════════════════════════════════════════════════════════════ -->
+	<div class="section">
+		<div class="scene-card">
+			<div class="scene-header">
+				<div class="scene-status">
+					<span class="pill paused" id="scenePill">⏸ Paused</span>
+					<span class="pump-chip" id="pmpChipA"><strong>Pump A</strong><span id="pmpAText">idle</span></span>
+					<span class="pump-chip" id="pmpChipB"><strong>Pump B</strong><span id="pmpBText">idle</span></span>
+					<span class="pump-chip" id="pmpChipC"><strong>Pump C</strong><span id="pmpCText">idle</span></span>
+				</div>
+				<div class="scene-clock">
+					<div class="sun-moon day" id="sunMoon"></div>
+					<div class="clock-text">
+						<div class="day-name" id="dayLabel">Monday · Day 1</div>
+						<div class="time-val" id="timeLabel">06:00</div>
+					</div>
+				</div>
+			</div>
+
+			<canvas id="scene" width="1200" height="540"></canvas>
+
+			<!-- Legend dots — each .dot uses a `dot--<role>` modifier class
+			     defined in app.css. No inline backgrounds. -->
+			<div class="scene-legend">
+				<span class="lg" id="lgFlow"    ><span class="dot dot--flow"       ></span>Active flow</span>
+				<span class="lg" id="lgExch"    ><span class="dot dot--exch"       ></span>Exchange outflow</span>
+				<span class="lg" id="lgChlor"   ><span class="dot dot--chlor"      ></span>Chlorine bubble</span>
+				<span class="lg" id="lgSed"     ><span class="dot dot--sed"        ></span>Sediment</span>
+				<span class="lg" id="lgBubble"  ><span class="dot dot--bubble"     ></span>Fresh-water bubble</span>
+				<span class="lg" id="lgPumpAct" ><span class="dot dot--pump-active"></span>Active pump</span>
+				<span class="lg" id="lgPumpIdle"><span class="dot dot--pump-idle"  ></span>Idle pump</span>
+			</div>
+
+			<div class="timeline">
+				<div class="head">
+					<span>Daily Schedule — Pump C Windows</span>
+					<span id="windowStatus">Schedule: 06:00 - 10:00 AM · 14:00 - 18:00 PM · 20:00 - 23:00 PM</span>
+				</div>
+				<div class="strip" id="strip"></div>
+			</div>
+		</div>
+	</div>
+
+	<!-- ════════════════════════════════════════════════════════════════════
+	     POND STATUS & SYSTEM READINGS — health box, per-pond cards,
+	     pump chips, system metrics, pump event timelines.
+	     ════════════════════════════════════════════════════════════════════ -->
+	<div class="section">
+		<div class="section-title">Pond Status &amp; System Readings</div>
+		<div class="status-bar">
+
+			<div class="card">
+				<div class="health-box ok" id="healthBox">
+					<div class="health-icon" id="healthIcon">✓</div>
+					<div class="health-info">
+						<div class="health-text" id="healthText">System Running Well</div>
+						<ul class="health-bullets" id="healthBullets"><li>All pumps operating within normal parameters.</li></ul>
+					</div>
+				</div>
+
+				<div class="subtitle">Pond Status</div>
+
+				<div class="pond-card empty" id="card-res">
+					<span class="badge" id="res-phase">EMPTY</span>
+					<div class="info"><span class="label">Reservoir</span><span class="desc" id="res-desc">Idle</span></div>
+					<span class="vol"><span id="res-vol">0</span> m³</span>
+				</div>
+				<div class="pond-card ready" id="card-tp1">
+					<span class="badge" id="tp1-phase">READY</span>
+					<div class="info"><span class="label">Treatment Pond 1</span><span class="desc" id="tp1-desc">Ready to transfer</span></div>
+					<span class="vol"><span id="tp1-vol">0</span> m³</span>
+				</div>
+				<div class="pond-card ready" id="card-tp2">
+					<span class="badge" id="tp2-phase">READY</span>
+					<div class="info"><span class="label">Treatment Pond 2</span><span class="desc" id="tp2-desc">Ready to transfer</span></div>
+					<span class="vol"><span id="tp2-vol">0</span> m³</span>
+				</div>
+				<div class="pond-card standby" id="card-cp">
+					<span class="badge" id="cp-phase">STANDBY</span>
+					<div class="info"><span class="label">Cultivation Pond</span><span class="desc" id="cp-desc">Operating level — water-exchange ready</span></div>
+					<span class="vol"><span id="cp-vol">0</span> m³</span>
+				</div>
+
+				<div class="pumprow">
+					<div class="pumpchip off" id="pc-A"><div class="nm">Pump A</div><div class="st" id="pc-A-st">Idle</div></div>
+					<div class="pumpchip off" id="pc-B"><div class="nm">Pump B</div><div class="st" id="pc-B-st">Idle</div></div>
+					<div class="pumpchip off" id="pc-C"><div class="nm">Pump C</div><div class="st" id="pc-C-st">Idle</div></div>
+				</div>
+			</div>
+
+			<div class="card">
+				<div class="subtitle">System Readings</div>
+				<div class="r-stats">
+					<div class="r-stat"><div class="r-label">Total Water Exchanged</div>  <div class="r-val"><strong id="v-exch">0</strong> m³</div></div>
+					<div class="r-stat"><div class="r-label">Exchange Cycles (100%)</div> <div class="r-val"><strong id="v-cycles">0</strong> cycles</div></div>
+				</div>
+
+				<div class="pump-timelines">
+					<div class="pt-title">Event Timelines · Today (06:00 → 06:00 next day)</div>
+					<div class="pt-row"><span class="pt-lbl pt-a" >Pump A</span>      <div class="pt-bar" id="pt-a-bar"></div></div>
+					<div class="pt-row"><span class="pt-lbl pt-b" >Pump B</span>      <div class="pt-bar" id="pt-b-bar"></div></div>
+					<div class="pt-row"><span class="pt-lbl pt-c" >Pump C</span>      <div class="pt-bar" id="pt-c-bar"></div></div>
+					<div class="pt-row"><span class="pt-lbl pt-ch">Chlorination</span><div class="pt-bar" id="pt-ch-bar"></div></div>
+					<div class="pt-row"><span class="pt-lbl pt-st">Settling</span>   <div class="pt-bar" id="pt-st-bar"></div></div>
+					<div class="pt-axis"><span>06:00</span><span>12:00</span><span>18:00</span><span>00:00</span><span>06:00</span></div>
+				</div>
+
+				<ul class="legend-bullets">
+					<li><strong>Pump A:</strong> respects its daily duty hours (rest period each day).</li>
+					<li><strong>Pump B:</strong> dynamic rate = TP capacity ÷ 11.5 h (fills a TP in 11.5 h when reservoir has water).</li>
+					<li><strong>Pump C:</strong> dynamic rate = TP capacity ÷ 11 h, so each TP drains in exactly 11 h of pumping across the three windows.</li>
+					<li><strong>TP Chlorination:</strong> 0.5 h, then 12 h settling.</li>
+					<li><strong>CP:</strong> water-exchange model — incoming water displaces an equal volume, so the level stays at operating capacity.</li>
+				</ul>
+			</div>
+
+		</div>
+	</div>
+
+	<!-- Page footer — sits at the bottom of .app, centred, subtle muted
+	     text. Hidden on print so it doesn't appear in the PDF report. -->
+	<footer class="page-footer">Copyright © David Suhartono, Senior Farm Engineer, 2026</footer>
+
+</div><!-- /.app -->
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     STAGE 4 · Scenarios modal — Save / Load / Compare / Delete
+     Hidden by default; the "Scenarios" button in the header toggles it.
+     Click on backdrop or ESC closes. Modal stays light on JS, with all
+     scenario data persisted to localStorage (key: delos-sim-scenarios).
+     ════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="scenariosModal" hidden role="dialog" aria-labelledby="scenariosTitle">
+	<div class="modal-card">
+		<div class="modal-head">
+			<div class="modal-head-titles">
+				<span class="modal-head-icon" aria-hidden="true">☰</span>
+				<div class="modal-head-text">
+					<h2 id="scenariosTitle">Scenarios</h2>
+					<span class="modal-head-sub">Save · Load · Compare · Print configurations</span>
+				</div>
+			</div>
+			<button type="button" class="modal-close" id="scenariosClose" aria-label="Close">×</button>
+		</div>
+		<div class="modal-body">
+			<!-- Toast message slot (success/error) -->
+			<div class="scen-toast" id="scenToast" hidden></div>
+
+			<!-- Save current state as a new scenario — wrapped in an
+			     accent-tinted panel so it reads as the primary entry
+			     point of the dialog. -->
+			<div class="scen-save-wrap">
+				<div class="scen-save-label">Save Current Configuration</div>
+				<div class="scen-save">
+					<input type="text" id="scenNameInput" placeholder="Scenario name (e.g. Normal Operations)" maxlength="60">
+					<button type="button" class="btn success" id="scenSaveBtn">💾 Save</button>
+				</div>
+			</div>
+
+			<!-- Select-all / status bar — tri-state checkbox + live counts
+			     of saved vs. selected for quick at-a-glance feedback. -->
+			<div class="scen-select-bar" id="scenSelectBar" hidden>
+				<label><input type="checkbox" id="scenSelectAll" aria-label="Select all scenarios"><span id="scenSelectAllLbl">Select all</span></label>
+				<span class="sel-status"><strong id="scenTotalCnt">0</strong> saved <span class="sel-pill is-zero" id="scenSelectedPill"><span id="scenSelectedCnt">0</span><span>selected</span></span></span>
+			</div>
+
+			<!-- List of saved scenarios. All bulk actions in the footer
+			     operate on the rows whose checkbox is ticked. -->
+			<div class="scen-list" id="scenList"></div>
+
+			<!-- Footer: 3 bulk-action buttons separated into "destructive"
+			     (Delete) and "safe" (Compare / Print) groups by a small
+			     vertical divider. Labels reflect the current selection
+			     count. -->
+			<div class="scen-actions">
+				<button type="button" class="btn danger"  id="scenDeleteBtn"  disabled>🗑 Delete</button>
+				<span class="scen-actions-divider" aria-hidden="true"></span>
+				<button type="button" class="btn primary" id="scenCompareBtn" disabled>⇆ Compare</button>
+				<button type="button" class="btn warn"    id="scenPrintBtn"   disabled>🖨 Print</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     STAGE 4 · Compare-view modal — side-by-side metrics table.
+     Opens from the Scenarios modal when user picks a target to compare.
+     Hidden on screen; populated by JS just before showing.
+     ════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="compareModal" hidden role="dialog" aria-labelledby="compareTitle">
+	<div class="modal-card modal-wide">
+		<div class="modal-head">
+			<h2 id="compareTitle">⇆ Compare Scenarios</h2>
+			<button type="button" class="modal-close" id="compareClose" aria-label="Close">×</button>
+		</div>
+		<div class="modal-body" id="compareBody"></div>
+	</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     STAGE 4 · Print-only report block.
+     Hidden on screen via .report-only{display:none} — revealed by the
+     @media print block. Populated dynamically by JS just before
+     window.print() so it always reflects current configuration.
+     ════════════════════════════════════════════════════════════════════════ -->
+<div class="report-only" id="reportBlock"></div>
+
+</body>
+</html>
